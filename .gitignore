@@ -43,6 +43,7 @@ index-*.css
 .dengerbot/
 .dengerbot-build/
 .openbot-browser-test/
+
 .openbot-build/
 # The home page beam, a React Bits port. Its license forbids a public copy; CI checks it out
 # from the private nightly-labs/openbot-laser-flow repository.
@@ -80,9 +81,6 @@ keys
 /changelog.d/*.md
 !/changelog.d/README.md
 /plans/
-
-# Persistent local development identity and migration recovery.
-.openbot/
 
 # Staged packaging artifacts: reproducible from install:node-runtime and prepare:dsh-runtime.
 /build/dsh-runtime/

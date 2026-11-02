@@ -151,7 +151,7 @@ State which surfaces a change touches. Check all affected consumers and reverse 
 - Use the development loader. It reads the development key from the shell; without the key,
   local development must work with generated defaults. Commands that need external secrets must
   stop before remote changes when those secrets are missing. An invalid key must fail safely.
-- Keep generated identity and saved local overrides in ignored `.openbot/dev-state.json`.
+- Keep generated identity and saved local overrides in ignored `.dengerbot/dev-state.json`.
   New manual overrides use shell variables. Do not add `.env.local` or `.env.generated`.
 - `.env.keys` stores decryption keys, not service settings. Keep it ignored. Preserve existing
   production key handling and CI/GitHub secrets unless the developer requests a change.
