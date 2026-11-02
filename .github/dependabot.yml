@@ -6,7 +6,7 @@ updates:
       interval: weekly
       day: monday
       time: "08:00"
-      timezone: Europe/Warsaw
+      timezone: Asia/Shanghai
     open-pull-requests-limit: 5
     # Match `minimumReleaseAge` in bunfig.toml, which rejects newer versions.
     cooldown:

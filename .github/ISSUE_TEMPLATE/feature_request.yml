@@ -8,7 +8,7 @@ body:
       value: |
         OpenBot is a local-first app: workspaces, conversations, and files stay on the user's computer. We accept requests that fit this product and solve a real problem for many users.
 
-        Do not open a pull request for a new feature or a change to existing behavior until a maintainer adds the `approved` label to this issue. We close such pull requests. Read [What you can send](https://github.com/nightly-labs/openbot/blob/main/CONTRIBUTING.md#what-you-can-send) first. For questions and open ideas, use [Discussions](https://github.com/nightly-labs/openbot/discussions).
+        Do not open a pull request for a new feature or a change to existing behavior until a maintainer adds the `approved` label to this issue. We close such pull requests. Read [What you can send](https://github.com/zuoyou12/Dengerbot/blob/main/.github/CONTRIBUTING.md#what-you-can-send) first. For questions and open ideas, use [Discussions](https://github.com/zuoyou12/Dengerbot/discussions).
 
   - type: dropdown
     id: type
