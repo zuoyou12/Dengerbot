@@ -40,7 +40,7 @@
         "lucide-solid": "catalog:",
         "marked": "catalog:",
         "qrcode": "catalog:",
-        "solid-js": "2.0.0-rc.18",
+        "solid-js": "2.0.0-rc.20",
         "solid-recharts": "catalog:",
         "solid-sonner": "catalog:",
         "tldts": "7.4.19",
@@ -88,7 +88,7 @@
         "@solidjs/web": "catalog:",
         "effect": "catalog:",
         "lucide-solid": "catalog:",
-        "solid-js": "2.0.0-rc.18",
+        "solid-js": "2.0.0-rc.20",
       },
       "devDependencies": {
         "@solidjs/vite-plugin": "catalog:",
@@ -1596,7 +1596,7 @@
 
     "@solidjs/compiler-win32-x64-msvc": ["@solidjs/compiler-win32-x64-msvc@2.0.0-rc.18", "", { "os": "win32", "cpu": "x64" }, "sha512-DOfsflkkvZ4XRzcgKPTpthdtDB4syTr+8ci6ZZkcfexi2TaxiWROIP7heMFlBBYrSYINW8ct6eOjgkFUom4kqQ=="],
 
-    "@solidjs/signals": ["@solidjs/signals@2.0.0-rc.18", "", {}, "sha512-pzYahnM93EpDN4xZF1EefdjPE6Buuu/90/kiaLOjUFhPd3H0W6J9R8lIF+kkD1Z78LW1OTHciRY5MCqpYj5iSQ=="],
+    "@solidjs/signals": ["@solidjs/signals@2.0.0-rc.20", "", {}, "sha512-BIL5dKm0dAtPGsCEuLSNw60spDbmYG5QFK+aHUxPIgPLweA8IeJKd62DiqqqU/jqX0x39ty31GoP1n+ZINkrcg=="],
 
     "@solidjs/testing-library": ["@solidjs/testing-library@1.0.0-rc.2", "", { "dependencies": { "@testing-library/dom": "^10.4.2" }, "peerDependencies": { "@solidjs/web": ">=2.0.0-0", "solid-js": ">=2.0.0-0" } }, "sha512-QZqIVoyDAqaGgSsWQ3gnYGaG1peFkNF0/n5uM+393g5plZlcvgxmUgdjsQtwrRLVZCrh0K1lp7YHxsAlN5XPkA=="],
 
@@ -2886,7 +2886,7 @@
 
     "smol-toml": ["smol-toml@1.9.0", "", {}, "sha512-hpd+HLON7HdZXqYchMM/+LaTTbdK0AU3NngIJ4KVyWbY9bfQqdL9cD+4yf6dUoU2Ap4VsU0JkQi6FxAI1B2mXQ=="],
 
-    "solid-js": ["solid-js@2.0.0-rc.18", "", { "dependencies": { "@solidjs/signals": "^2.0.0-rc.18", "csstype": "^3.1.0", "seroval": "1.7.0", "seroval-plugins": "1.7.0" } }, "sha512-g4KjUQUjfqvqHYnBddN5nVAF7DFcDjtuH+NeDu/26vx6SlSDiqBJS8jsNag6VpdKAnfK8oLfphogEhXtM4UOyw=="],
+    "solid-js": ["solid-js@2.0.0-rc.20", "", { "dependencies": { "@solidjs/signals": "^2.0.0-rc.20", "csstype": "^3.1.0", "seroval": "1.7.0", "seroval-plugins": "1.7.0" } }, "sha512-FxaEI7LHupehFoR9j2CfJAGCoRgiKgeNlzii4szUS6lnD8RkpdtvX1k6WFG71vl5bskXRRsmEQVAXsbIemQOuw=="],
 
     "solid-recharts": ["solid-recharts@1.0.1", "", { "dependencies": { "@types/d3-scale": "^4.0.2", "@types/d3-shape": "^3.1.0", "d3-scale": "^4.0.2", "d3-shape": "^3.1.0" }, "peerDependencies": { "solid-js": "^1.9.0" } }, "sha512-EKwNlogDiYm9YHN9CKbzaRGb3rOliIXPoE938ldwdOoOS0LlenwKrIVkxGx6Ty5dV2yZgTjXIU7ign6Hde9xDQ=="],
 
