@@ -34,12 +34,14 @@ test-results/
 .local-work/
 .changeset/
 .plan/
-test-results/
 storybook-static/
 Shared/
 !apps/mobile/src/shared/
 !apps/mobile/src/shared/**
 index-*.css
+# Local development identity and build artifacts of this build.
+.dengerbot/
+.dengerbot-build/
 .openbot-browser-test/
 .openbot-build/
 # The home page beam, a React Bits port. Its license forbids a public copy; CI checks it out
