@@ -2,7 +2,7 @@
   "name": "dengerbot",
   "productName": "Dengerbot",
   "desktopName": "dengerbot.desktop",
-  "version": "0.0.01Preview",
+  "version": "0.0.1-preview",
   "description": "A local-first multi-agent desktop workspace powered by DeepSeek and custom API endpoints.",
   "author": "zuoyou12",
   "license": "PolyForm-Noncommercial-1.0.0",
