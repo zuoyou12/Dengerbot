@@ -5,7 +5,7 @@
   "version": "0.0.1-preview",
   "description": "A local-first multi-agent desktop workspace powered by DeepSeek and custom API endpoints.",
   "author": "zuoyou12",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/zuoyou12/Dengerbot.git"

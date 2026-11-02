@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "MIT",
   "exports": {
     "./features/subscriptions/SubscriptionLogo": "./src/features/subscriptions/SubscriptionLogo.tsx",
     ".": "./src/index.ts",

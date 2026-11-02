@@ -30,12 +30,12 @@ let
     homepage = "https://github.com/nightly-labs/openbot";
     changelog = "https://github.com/nightly-labs/openbot/releases/tag/v${version}";
     license = {
-      shortName = "polyform-nc-10";
-      fullName = "PolyForm Noncommercial License 1.0.0";
-      spdxId = "PolyForm-Noncommercial-1.0.0";
-      url = "https://polyformproject.org/licenses/noncommercial/1.0.0/";
-      free = false;
-      redistributable = false;
+      shortName = "mit";
+      fullName = "MIT License";
+      spdxId = "MIT";
+      url = "https://opensource.org/licenses/MIT";
+      free = true;
+      redistributable = true;
     };
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
     platforms = builtins.attrNames sources.assets;

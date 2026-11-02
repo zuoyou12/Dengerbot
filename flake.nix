@@ -14,8 +14,9 @@
         "aarch64-linux"
         "aarch64-darwin"
       ];
-      # OpenBot is not free software (PolyForm Noncommercial), so nixpkgs refuses it by default. A user
-      # who asks for this flake's package has asked for OpenBot; other unfree packages stay refused.
+      # Dengerbot is MIT, but the OpenBot-derived portions keep their PolyForm Noncommercial terms, so
+      # nixpkgs would refuse the package by default. A user who asks for this flake's package has asked
+      # for it; other unfree packages stay refused.
       forEachSystem =
         f:
         lib.genAttrs systems (

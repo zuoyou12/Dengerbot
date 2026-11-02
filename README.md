@@ -1,6 +1,6 @@
 # Dengerbot
 
-[![License](https://img.shields.io/badge/license-PolyForm_Noncommercial_1.0.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Dengerbot is a local-first desktop workspace for persistent AI teammates. It supports Claude Code and deepseek-ai/dsh (DeepSeek Harness), plus custom API endpoints with model discovery. It gives every agent its own workspace and conversation, local queues, file transfers, and an embedded browser.
 
@@ -25,4 +25,6 @@ Download and run from the [GitHub Releases](https://github.com/zuoyou12/Dengerbo
 
 ## License
 
-PolyForm Noncommercial 1.0.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE). This product includes software derived from
+OpenBot under the PolyForm Noncommercial License 1.0.0; that upstream license still applies to the
+OpenBot-derived portions.

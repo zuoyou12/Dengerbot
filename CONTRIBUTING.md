@@ -13,4 +13,4 @@
 
 ## 许可和归属
 
-本项目包含基于 OpenBot 的代码，使用 [PolyForm Noncommercial License 1.0.0](LICENSE)。提交贡献前请确认你有权按项目许可提交代码，并保留适用的原作者、版权及第三方许可声明；详见 [NOTICE](NOTICE)。
+Dengerbot 的改动使用 [MIT 许可](LICENSE)，并包含基于 OpenBot 的代码（上游使用 PolyForm Noncommercial License 1.0.0）。提交贡献前请确认你有权按相应许可提交代码，并保留适用的原作者、版权及第三方许可声明；详见 [NOTICE](NOTICE)。
