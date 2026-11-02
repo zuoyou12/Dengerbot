@@ -12,8 +12,8 @@ import { typeCheckerScript } from "./type-checker";
 const ROOT = resolve(import.meta.dirname, "..");
 // Every project that extends tsconfig.base.json. apps/mobile extends the Expo base config.
 const PROJECTS = [
-  "tsconfig.node.json",
-  "tsconfig.web.json",
+  "config/tsconfig.node.json",
+  "config/tsconfig.web.json",
   "apps/auth-api/tsconfig.json",
   "packages/brand/tsconfig.json",
   "packages/contracts/tsconfig.json",

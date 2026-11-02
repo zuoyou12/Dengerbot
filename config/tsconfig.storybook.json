@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.web.json",
+  "compilerOptions": {
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom", "node"],
+    "tsBuildInfoFile": "../node_modules/.cache/tsbuildinfo/storybook.tsbuildinfo"
+  },
+  "include": ["../.storybook/**/*.ts", "../.storybook/**/*.tsx", "../src/renderer/src/env.d.ts"]
+}

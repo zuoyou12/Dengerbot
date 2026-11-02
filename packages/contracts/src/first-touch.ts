@@ -3,7 +3,7 @@ import { isDynamicRecord, isOneOf, isString } from "./runtime-values";
 /**
  * The first visit of this browser to openbot.run, as the website saves it. The web client and the
  * checkout return page send it to the account service, which keeps the first one it gets for an
- * account. ANALYTICS.md describes the attribution; every field is a closed set or a bounded label.
+ * account. docs/ANALYTICS.md describes the attribution; every field is a closed set or a bounded label.
  */
 export interface FirstTouch {
   acquisitionSource: FirstTouchAcquisitionSource;

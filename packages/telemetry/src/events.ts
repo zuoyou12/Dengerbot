@@ -79,7 +79,7 @@ export type ReportContext = Pick<Report, "surface" | "app_version" | "platform" 
 
 /**
  * The current analytics generation of each surface. Product events and failure reports send the same value.
- * Change a value only together with ANALYTICS.md.
+ * Change a value only together with docs/ANALYTICS.md.
  */
 export const ANALYTICS_GENERATIONS = {
   desktop_host: 11,
@@ -114,14 +114,13 @@ export function safeProperties(input: unknown): FailureProperties | null {
   if (Option.isNone(decoded)) return null;
   const value = decoded.value;
   // Only public model families can cross this boundary. Custom endpoints can put private names in model ids.
-  const model =
-    (value.provider as string) !== "acp" && value.model
-      ? /^(?:(?:openai|anthropic|google|opencode|codex|claude)\/)?(?:gpt-\d+(?:\.\d+)*(?:-(?:mini|nano|pro|codex|max|sol|astra|luna|terra|chat|latest|preview))*|o[134](?:-(?:mini|pro|preview))*|claude-(?:opus|sonnet|haiku|fable)(?:-\d+)*(?:\[1m\])?|gemini-\d+(?:\.\d+)*(?:-(?:pro|flash|lite|preview))*|big-pickle|auto)$/u.test(
-          value.model,
-        )
-        ? value.model
-        : "custom"
-      : undefined;
+  const model = value.model
+    ? /^(?:(?:openai|anthropic|google|opencode|codex|claude)\/)?(?:gpt-\d+(?:\.\d+)*(?:-(?:mini|nano|pro|codex|max|sol|astra|luna|terra|chat|latest|preview))*|o[134](?:-(?:mini|pro|preview))*|claude-(?:opus|sonnet|haiku|fable)(?:-\d+)*(?:\[1m\])?|gemini-\d+(?:\.\d+)*(?:-(?:pro|flash|lite|preview))*|big-pickle|auto)$/u.test(
+        value.model,
+      )
+      ? value.model
+      : "custom"
+    : undefined;
   return {
     ...(value.area ? { area: value.area } : {}),
     ...(value.reasoning_effort ? { reasoning_effort: value.reasoning_effort } : {}),

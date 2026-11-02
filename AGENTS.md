@@ -35,7 +35,7 @@ and state which default you set aside. Do not argue by citing this file.
   PolyForm Noncommercial 1.0.0 terms and their NOTICE attribution. Do not add incompatible
   dependencies or relicense upstream files.
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md#security-sensitive-changes) when a change touches the trust
+Read [CONTRIBUTING.md](.github/CONTRIBUTING.md#security-sensitive-changes) when a change touches the trust
 boundary or a security test, and [architecture change rules](docs/architecture/change-rules.md#change-rules) when
 adding a module or moving ownership between workspaces.
 
@@ -137,7 +137,7 @@ State which surfaces a change touches. Check all affected consumers and reverse 
   (`src/renderer/src/preview/mock-openbot.ts`).
 - Reverse actions: snooze/unsnooze, pause/resume, revoke/reconnect, mute/unmute.
 - Migrations and the separate latest schema for new databases.
-- Documentation: `README.md` commands, `docs/architecture/`, and `PRIVACY.md` when outbound data
+- Documentation: `README.md` commands, `docs/architecture/`, and `docs/PRIVACY.md` when outbound data
   changes.
 
 ## Development data and processes
