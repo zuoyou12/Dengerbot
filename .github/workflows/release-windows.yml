@@ -1,0 +1,44 @@
+name: Windows installer
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build the installer for, for example v0.0.1-preview
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and upload
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A tag build checks the tag out directly; a manual run checks the chosen tag out too.
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 1
+      - uses: ./.github/actions/setup-bun
+      - name: Build the NSIS installer
+        run: bun run dist:win
+      - name: Checksum the installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          for archive in dist/Dengerbot-*-x64.exe; do
+            sha256sum "$archive" | sed 's|dist/||' > "$archive.sha256"
+            cat "$archive.sha256"
+          done
+      - name: Upload to the release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then tag="${{ github.event.inputs.tag }}"; fi
+          gh release upload "$tag" dist/Dengerbot-*-x64.exe dist/Dengerbot-*-x64.exe.sha256 --clobber
