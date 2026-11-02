@@ -55,13 +55,7 @@
   .agent-queue-panel,
   .routine-popover,
   .integration-logo-tile,
-  .first-agent-suggestion-card,
-  /* marketplace (radius-card cover and pages, radius-lg icon tiles) */
-  .marketplace-book-cover,
-  .marketplace-book-page,
-  .marketplace-book-board,
-  .marketplace-book-cover-icon,
-  .marketplace-detail-head-icon {
+  .first-agent-suggestion-card {
     corner-shape: superellipse(1.25);
   }
 }

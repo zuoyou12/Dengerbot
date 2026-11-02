@@ -9,6 +9,12 @@ const ALLOWED_DIRECTORIES = [
   // Images that the renderer bundles, and Storybook fixtures.
   "src/renderer/src/assets/",
   "src/renderer/stories/assets/",
+  // Product marks and icons that shared packages bundle: the app logo, bot avatars and the
+  // provider and subscription icons.
+  "packages/brand/src/assets/",
+  "packages/ui/src/assets/",
+  // Product resources shipped beside the app, such as the bundled browser skills.
+  "resources/",
   // Expo icons and splash screens.
   "apps/mobile/assets/",
   // Public site files, news and guide art, and guide images.

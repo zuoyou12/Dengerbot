@@ -154,6 +154,7 @@ export const messages = defineMessages("provider", {
   "provider.deepseekKey.description":
     "Save a DeepSeek API key on this computer to connect to DeepSeek and fetch available models.",
   "provider.deepseekKey.label": "DeepSeek API key",
+  "provider.deepseekKey.console": "Get an API key from the DeepSeek console",
   "provider.deepseekAccount.apiKeyDescription":
     "Use a DeepSeek API key. Its saved status is separate from account authorization and does not confirm that a connection test passed.",
   "provider.dsh.ready": "DSH connected",

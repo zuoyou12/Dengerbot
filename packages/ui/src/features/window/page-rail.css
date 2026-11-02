@@ -26,7 +26,7 @@
   justify-content: center;
 }
 
-.window-rail-logo .app-logo {
+.window-rail-logo-mark {
   width: var(--rail-logo-size);
   height: var(--rail-logo-size);
   flex-shrink: 0;

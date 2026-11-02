@@ -67,7 +67,10 @@ export interface ProviderKeyApi {
   setProviderApiKey: (input: { provider: AgentProviderId; key: string }) => Promise<unknown>;
   clearProviderApiKey: (provider: AgentProviderId) => Promise<unknown>;
   openExternal: (destination: ExternalDestination) => Promise<void>;
-  testProviderApiKey?: (input: { provider: AgentProviderId; key: string }) => Promise<{ ok: boolean; models?: string[]; error?: string }>;
+  testProviderApiKey?: (input: {
+    provider: AgentProviderId;
+    key: string;
+  }) => Promise<{ ok: boolean; models?: string[]; error?: string }>;
 }
 
 export interface OpenCodeKeyDialogProps {
@@ -226,11 +229,16 @@ export function OpenCodeKeyDialog(props: OpenCodeKeyDialogProps) {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      style={{ padding: "0 4px", height: "20px", "font-size": "12px", gap: "4px" }}
+                      style={{
+                        padding: "0 4px",
+                        height: "20px",
+                        "font-size": "var(--openbot-text-sm)",
+                        gap: "4px",
+                      }}
                       onClick={() => void props.api.openExternal("deepseek-console")}
                     >
                       <ExternalLink size={12} aria-hidden="true" />
-                      <span>前往 DeepSeek 控制台获取 API Key</span>
+                      <span>{t("provider.deepseekKey.console")}</span>
                     </Button>
                   </div>
                 </Show>

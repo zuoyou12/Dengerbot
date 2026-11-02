@@ -152,6 +152,7 @@ export const messages = {
   "provider.deepseekKey.title": "DeepSeek API 密钥",
   "provider.deepseekKey.description": "在这台电脑上保存 DeepSeek API 密钥，即可连接 DeepSeek 并获取可用模型。",
   "provider.deepseekKey.label": "DeepSeek API 密钥",
+  "provider.deepseekKey.console": "前往 DeepSeek 控制台获取 API Key",
   "provider.deepseekAccount.apiKeyDescription":
     "使用 DeepSeek API 密钥调用。密钥保存状态与账号授权独立，已保存不代表已通过连接测试。",
   "provider.dsh.ready": "DSH 已连接",
