@@ -1,0 +1,28 @@
+{
+  "slug": "anthropic-claude-api",
+  "name": "Claude API (Anthropic)",
+  "tagline": "Write correct code against the Claude API",
+  "description": "Anthropic's reference skill for integrating with the Claude API: model names, streaming, tool use, and the error handling that production code needs.",
+  "category": "coding",
+  "creatorName": "Anthropic",
+  "version": "1.0.0",
+  "prompts": [
+    {
+      "id": "prompt-anthropic-claude-api-1",
+      "text": "Write a streaming chat client against the Claude API."
+    }
+  ],
+  "apps": [],
+  "skills": [
+    {
+      "id": "preset-anthropic-claude-api",
+      "slug": "anthropic-claude-api",
+      "name": "Claude API (Anthropic)",
+      "description": "1 skills"
+    }
+  ],
+  "websiteUrl": "https://github.com/anthropics/skills",
+  "privacyPolicyUrl": null,
+  "termsUrl": null,
+  "iconUrl": null
+}

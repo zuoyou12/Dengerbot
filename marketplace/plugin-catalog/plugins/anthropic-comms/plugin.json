@@ -1,0 +1,32 @@
+{
+  "slug": "anthropic-comms",
+  "name": "Comms & Brand (Anthropic)",
+  "tagline": "Internal comms, document co-authoring and brand guidelines",
+  "description": "Communication skills from Anthropic: internal-comms drafts announcements and updates, doc-coauthoring runs a real co-writing process, and brand-guidelines keeps output on-brand.",
+  "category": "documents",
+  "creatorName": "Anthropic",
+  "version": "1.0.0",
+  "prompts": [
+    {
+      "id": "prompt-anthropic-comms-1",
+      "text": "Draft a launch announcement for the whole company."
+    },
+    {
+      "id": "prompt-anthropic-comms-2",
+      "text": "Co-author this blog post with me, section by section."
+    }
+  ],
+  "apps": [],
+  "skills": [
+    {
+      "id": "preset-anthropic-comms",
+      "slug": "anthropic-comms",
+      "name": "Comms & Brand (Anthropic)",
+      "description": "3 skills"
+    }
+  ],
+  "websiteUrl": "https://github.com/anthropics/skills",
+  "privacyPolicyUrl": null,
+  "termsUrl": null,
+  "iconUrl": null
+}

@@ -1,0 +1,18 @@
+{
+  "slug": "skill-creator",
+  "name": "Skill Creator",
+  "tagline": "Design and package new agent skills from scratch",
+  "description": "Walks the agent through creating a new skill: naming, frontmatter, structure and packaging, so the skills you author install cleanly anywhere.",
+  "category": "automation",
+  "creatorName": "Z.ai",
+  "iconUrl": null,
+  "version": "1.0.0",
+  "prompts": [{ "id": "prompt-skill-creator-1", "text": "Create a skill that reviews pull-request descriptions." }],
+  "apps": [],
+  "skills": [
+    { "id": "preset-skill-creator", "slug": "skill-creator", "name": "Skill Creator", "description": "1 skills" }
+  ],
+  "websiteUrl": null,
+  "privacyPolicyUrl": null,
+  "termsUrl": null
+}

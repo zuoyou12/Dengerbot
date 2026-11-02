@@ -1,0 +1,19 @@
+{
+  "slug": "spreadsheets",
+  "name": "Spreadsheets",
+  "tagline": "Build and audit spreadsheets with formulas and charts",
+  "description": "Spreadsheet skills: model data, write formulas that survive editing, and audit a workbook for broken references and inconsistent ranges.",
+  "category": "data-analytics",
+  "creatorName": "Z.ai",
+  "iconUrl": null,
+  "version": "1.0.0",
+  "prompts": [
+    { "id": "prompt-spreadsheets-1", "text": "Build a budget spreadsheet with monthly rollups." },
+    { "id": "prompt-spreadsheets-2", "text": "Audit this workbook for broken formulas." }
+  ],
+  "apps": [],
+  "skills": [{ "id": "preset-spreadsheets", "slug": "spreadsheets", "name": "Spreadsheets", "description": "2 skills" }],
+  "websiteUrl": null,
+  "privacyPolicyUrl": null,
+  "termsUrl": null
+}

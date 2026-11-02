@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "v1",
+  "plugins": [
+    {
+      "slug": "aave",
+      "version": "1.0.0",
+      "featured": true,
+      "detailSha256": "b02e6e78e3552b1a152757cdbbbe4f59cd44a2bcc75d219a24faa45482d8cf47"
+    },
+    {
+      "slug": "canva",
+      "version": "1.0.0",
+      "featured": true,
+      "detailSha256": "4e3d3838f5558ce319801a61886089cf0befbcaff8a0a7e3a14b85204b7c6b7f"
+    },
+    {
+      "slug": "linear",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "2088707212cb2494fa22420cdc268e7bf81eabda1333e7708bb5f758740e01e7"
+    },
+    {
+      "slug": "notion",
+      "version": "1.0.0",
+      "featured": true,
+      "detailSha256": "44cece384a20b3ee5e1c31ffa21dd1f83e207c80688c24e4019ae09d6949c129"
+    },
+    {
+      "slug": "obsidian",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "0a962e0a3d349a1dcb07da43f49743755655ac9cefccb6170ea28c9afa48a611"
+    },
+    {
+      "slug": "atlassian",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "7e2b885a7eac6fff801d60406188ce07d0b56e11299d2f3dc263299cb3e6dbb2"
+    },
+    {
+      "slug": "todoist",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "22850e7b7addf5bb42414569970523ac1a22f07d41770b1840aae2380f35865c"
+    },
+    {
+      "slug": "cobrain",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "0c26288f3443ae8d834c449c56bb72732bbd709a0ef4139eec82799d8f48a8c0"
+    },
+    {
+      "slug": "figma",
+      "version": "1.1.0",
+      "featured": true,
+      "detailSha256": "2d1e4b42ba43ccfd2d59fc35351d69623cc18c4b0612a076b07e0ff40c5b3038"
+    },
+    {
+      "slug": "paper",
+      "version": "1.0.1",
+      "featured": false,
+      "detailSha256": "2e9799f43ff5490416094b0a1bd7021d40ff17c21a4535929613df4a2e274b05"
+    },
+    {
+      "slug": "apple-apps",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "079c8100fe0964287495e32111bcaeaf089fcdc585752b7f21b77247fd9693f4"
+    },
+    {
+      "slug": "sentry",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "26b19d4892f03781c84b6ae48dbc0abe6d3863b1c687d9433de4533854b96a07"
+    },
+    {
+      "slug": "vercel",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "603aa64fac3c1144ae9bfc11f74b6829f678893d123e1f007f2c70794a06f8b8"
+    },
+    {
+      "slug": "cloudflare",
+      "version": "1.0.1",
+      "featured": false,
+      "detailSha256": "835a5aced40b2d94384e307cae86fdd73531263f5560a21e828c42850f0f15fa"
+    },
+    {
+      "slug": "supabase",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "c1e5183d88d5cdac7376cf4b02fb1f94d480066748f02ccba983d675ebd7ef68"
+    },
+    {
+      "slug": "neon",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "f0308403cadc205878a1777720f86d7cdb04b84180541f0a372aa90817dcbde8"
+    },
+    {
+      "slug": "prisma",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "d209aeaa5547cfd61d01d2c234436db5d659c507c204e0327c20627af59f4cbe"
+    },
+    {
+      "slug": "netlify",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "4d457281e7dd0f25d7136f31225982827ea6bf7d102aa84f18380cf29168a90f"
+    },
+    {
+      "slug": "railway",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "d45199e012ed89e18102ce73b9adac50d13c4a393ee2d6bc05ba2f7368a4afb6"
+    },
+    {
+      "slug": "context7",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "160043f37c7dd8d95dac8b714540c87f5da67bdfd5264a531bd1add1c1883bd8"
+    },
+    {
+      "slug": "huggingface",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "7a788260573de48738afdc4a096dbf03d6fbb072aa2c689504ee0dadb99ba12c"
+    },
+    {
+      "slug": "stripe",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "e28c20dcb1957df31d33acf168fb12111883f6f52f7db1136b5998cb3e5128b3"
+    },
+    {
+      "slug": "posthog",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "24c27da0aa7ce34fc9c344c50ddd79c8ac8b84f085040b69e79b39b3192be421"
+    },
+    {
+      "slug": "airtable",
+      "version": "1.0.1",
+      "featured": false,
+      "detailSha256": "f69dd4fa2ef073ec295a746a7b4c6250878cde597b07e3b93ffb4e0790868524"
+    },
+    {
+      "slug": "firecrawl",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "e6e6c638f04767a18d4c2cdac937f693a8e200895f11fc0874d1b362f3ad17a1"
+    },
+    {
+      "slug": "brave-search",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "0e88f93321b4551465355518028385e069140dcb860a8cbf53852099be4f77b0"
+    },
+    {
+      "slug": "resend",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "c965cba235a867d714865522cdbf5dcdf3b487ce6e4f4403a492d9beb89ffc5a"
+    },
+    {
+      "slug": "composio",
+      "version": "1.1.0",
+      "featured": false,
+      "detailSha256": "a62382fa19cd5586719e83d9d022eb310baf392cca0f9f13efee6efa4a6ac02c"
+    },
+    {
+      "slug": "pstack",
+      "version": "1.0.0",
+      "featured": true,
+      "detailSha256": "5ff97758e67a01ff168b34c3c8eb7be393ef02a79da367c33228569663b8aa98"
+    },
+    {
+      "slug": "superpowers",
+      "version": "1.0.0",
+      "featured": true,
+      "detailSha256": "361660b88ffb175c7832a471b7b64047d15aa4120daa4bef2ef2fe82185966a2"
+    },
+    {
+      "slug": "documents",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "c2ec95bd8a722899175536dd9449d00bb9ee436f93d3db588621e9822b22a558"
+    },
+    {
+      "slug": "pdf",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "cbf23c69ec72fadc0978fde742784296771b389bb9b757f04b30b44878d0f015"
+    },
+    {
+      "slug": "spreadsheets",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "54c34f6ed2646342a250e6daccc1f22eeb76016af23227a8e12cd0292254ff18"
+    },
+    {
+      "slug": "presentations",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "03b535bd4e11bec4532fdea2d5bc28fd590dd968a3a73c72fb9feb7b97a2a0d5"
+    },
+    {
+      "slug": "skill-creator",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "24f4039229bc68753adc491b30aeaf1c70f99841700b91a952a8039715c360e3"
+    },
+    {
+      "slug": "visualize",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "6f0741bcef16697704694e4c721ec1d19c0d48f867430d1ef9338b99a7d8a80a"
+    },
+    {
+      "slug": "anthropic-web",
+      "version": "1.0.0",
+      "featured": true,
+      "detailSha256": "6cff523ef5d045604940d78438f2fda2c9f7be91884b1925644a71a24ac74e32"
+    },
+    {
+      "slug": "anthropic-mcp-builder",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "0631b11e305d4eb28bcf6b84dedf6fbe17f8e60116c2bb0cef11dc9c916e5b83"
+    },
+    {
+      "slug": "anthropic-creative",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "158626042d02eb1f61b12c54b6a8e09ce19eadc54d78d0c1a6e2f14402132a16"
+    },
+    {
+      "slug": "anthropic-comms",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "8c9f3eb5a923227c0fa3e33c2191137c56f0b22a5fb592110ba387d2862978b1"
+    },
+    {
+      "slug": "anthropic-claude-api",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "2a70b4cae9405a006bd70c714fda9cf7d628c65c5acb3253433ea1c0de85c79d"
+    },
+    {
+      "slug": "mcp-everything",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "8920033880a54ec9b24b207cf3e6d54582a7a27b25d88e05da83fc5a07b4b91d"
+    },
+    {
+      "slug": "mcp-memory",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "51c611de082a5685c81ff19c71fea56dae8209196876d663b7cb9a74ce8ff5d1"
+    },
+    {
+      "slug": "mcp-sequential-thinking",
+      "version": "1.0.0",
+      "featured": false,
+      "detailSha256": "3be910ce1f1a62374f02fea28596f7ea00e830c874c765f7989c0cecb599c043"
+    }
+  ]
+}
