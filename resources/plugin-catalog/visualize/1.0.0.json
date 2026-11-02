@@ -1,0 +1,16 @@
+{
+  "slug": "visualize",
+  "name": "Visualize",
+  "tagline": "Interactive visualizations and exploratory graphics",
+  "description": "Visualization skills for turning data and ideas into interactive charts, maps and simulations that run in the browser.",
+  "category": "design",
+  "creatorName": "Z.ai",
+  "iconUrl": null,
+  "version": "1.0.0",
+  "prompts": [{ "id": "prompt-visualize-1", "text": "Visualize this dataset as an interactive chart." }],
+  "apps": [],
+  "skills": [{ "id": "preset-visualize", "slug": "visualize", "name": "Visualize", "description": "1 skills" }],
+  "websiteUrl": null,
+  "privacyPolicyUrl": null,
+  "termsUrl": null
+}

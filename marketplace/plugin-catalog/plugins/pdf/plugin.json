@@ -1,0 +1,32 @@
+{
+  "slug": "pdf",
+  "name": "PDF",
+  "tagline": "Extract, merge, split and generate PDF files",
+  "description": "PDF skills for pulling text and tables out of PDFs, merging and splitting documents, and generating PDFs from structured content.",
+  "category": "documents",
+  "creatorName": "Z.ai",
+  "version": "1.0.0",
+  "prompts": [
+    {
+      "id": "prompt-pdf-1",
+      "text": "Extract every table from this PDF into markdown."
+    },
+    {
+      "id": "prompt-pdf-2",
+      "text": "Merge these three reports into one PDF."
+    }
+  ],
+  "apps": [],
+  "skills": [
+    {
+      "id": "preset-pdf",
+      "slug": "pdf",
+      "name": "PDF",
+      "description": "2 skills"
+    }
+  ],
+  "websiteUrl": null,
+  "privacyPolicyUrl": null,
+  "termsUrl": null,
+  "iconUrl": null
+}

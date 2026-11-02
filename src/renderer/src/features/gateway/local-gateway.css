@@ -1,0 +1,220 @@
+.subscription-page {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  color: var(--openbot-text-primary);
+  background: var(--openbot-bg-canvas);
+}
+
+.subscription-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--openbot-space-4);
+  padding: var(--openbot-space-4) var(--openbot-space-6);
+  border-bottom: 1px solid var(--openbot-border);
+}
+
+.subscription-header-heading,
+.subscription-actions,
+.subscription-title-row,
+.subscription-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--openbot-space-2);
+}
+
+.subscription-title {
+  margin: 0;
+  font-size: var(--openbot-text-lg);
+  font-weight: var(--openbot-weight-semibold);
+  line-height: var(--openbot-leading-lg);
+}
+
+.subscription-scroll {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--openbot-space-8) var(--openbot-space-6);
+}
+
+.subscription-content {
+  display: flex;
+  width: 100%;
+  max-width: 960px;
+  margin-inline: auto;
+  flex-direction: column;
+  gap: var(--openbot-space-8);
+}
+
+.subscription-description,
+.subscription-note,
+.subscription-empty,
+.subscription-package {
+  margin: 0;
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-md);
+  line-height: var(--openbot-leading-lg);
+}
+
+.subscription-description {
+  color: var(--openbot-text-secondary);
+}
+
+.subscription-provider-logo {
+  display: flex;
+  width: var(--openbot-control-lg);
+  height: var(--openbot-control-lg);
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.subscription-provider-logo > svg,
+.subscription-provider-logo > img,
+.subscription-provider-logo > span {
+  width: var(--openbot-control-md);
+  height: var(--openbot-control-md);
+}
+
+.subscription-provider {
+  display: flex;
+  flex-direction: column;
+}
+
+.subscription-provider .ui-item-content {
+  min-width: 0;
+}
+
+.subscription-title-row {
+  flex-wrap: wrap;
+}
+
+.subscription-provider-details {
+  display: grid;
+  gap: var(--openbot-space-4);
+  padding: 0 var(--openbot-space-4) var(--openbot-space-4);
+}
+
+.subscription-provider-details summary {
+  cursor: pointer;
+  color: var(--openbot-text-secondary);
+  font-size: var(--openbot-text-md);
+}
+
+.subscription-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--openbot-space-2);
+  padding-block: var(--openbot-space-3);
+}
+
+.subscription-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--openbot-space-3);
+  margin-bottom: var(--openbot-space-4);
+}
+
+.subscription-search {
+  width: min(100%, 320px);
+}
+
+.subscription-plugin-list {
+  border-radius: var(--openbot-radius-card);
+  background: var(--openbot-bg-surface);
+  overflow: hidden;
+}
+
+.subscription-package {
+  overflow-wrap: anywhere;
+}
+
+.subscription-package-install {
+  display: grid;
+  gap: var(--openbot-space-2);
+  padding-block: var(--openbot-space-4);
+  font-size: var(--openbot-text-md);
+}
+
+.subscription-empty {
+  padding: var(--openbot-space-6);
+}
+
+.subscription-error {
+  color: var(--openbot-danger);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.subscription-login {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--openbot-space-3);
+  padding: var(--openbot-space-4);
+  background: var(--openbot-bg-surface);
+  border-radius: var(--openbot-radius-card);
+}
+
+.subscription-login label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--openbot-space-2);
+  color: var(--openbot-text-secondary);
+  font-size: var(--openbot-text-md);
+}
+
+.subscription-login-code {
+  user-select: text;
+  overflow-wrap: anywhere;
+  font-family: var(--openbot-font-mono);
+  font-size: var(--openbot-text-xl);
+}
+
+.subscription-usage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--openbot-space-3);
+  margin: 0;
+  color: var(--openbot-text-secondary);
+  font-size: var(--openbot-text-md);
+}
+
+.subscription-usage > div {
+  display: flex;
+  gap: var(--openbot-space-2);
+}
+
+.subscription-usage dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.subscription-option {
+  display: grid;
+  gap: var(--openbot-space-2);
+  margin-block: var(--openbot-space-3);
+  color: var(--openbot-text-secondary);
+  font-size: var(--openbot-text-md);
+}
+
+@media (max-width: 700px) {
+  .subscription-header,
+  .subscription-scroll {
+    padding: var(--openbot-space-4);
+  }
+
+  .subscription-provider .ui-item,
+  .subscription-plugin-list > .ui-item {
+    flex-wrap: wrap;
+  }
+
+  .subscription-actions {
+    flex-wrap: wrap;
+  }
+}

@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+while read -r local_ref local_sha remote_ref remote_sha; do
+  remote_sha=$(printf '%s' "$remote_sha" | tr -d '\r')
+  case "$local_sha" in 0000000000000000000000000000000000000000) continue ;; esac
+  if [ "$remote_sha" = 0000000000000000000000000000000000000000 ]; then
+    commits=$(git rev-list "$local_sha" --not --remotes)
+  else
+    commits=$(git rev-list "$remote_sha..$local_sha")
+  fi
+  for commit in $commits; do
+    paths=$(git diff-tree --root --no-commit-id --name-only --diff-filter=ACMR -r "$commit")
+    if ! printf '%s\n' "$paths" | sh .githooks/reject-local-records.sh; then
+      printf 'Push stopped: commit %s contains private development records.\n' "$commit" >&2
+      exit 1
+    fi
+  done
+done

@@ -1,0 +1,37 @@
+{
+  "slug": "mcp-everything",
+  "name": "Everything",
+  "tagline": "The everything test server: tools, resources and prompts for verifying an MCP connection",
+  "description": "The everything test server: tools, resources and prompts for verifying an MCP connection. Runs locally via npx, no credentials needed.",
+  "category": "other",
+  "creatorName": "Model Context Protocol",
+  "version": "1.0.0",
+  "prompts": [
+    {
+      "id": "prompt-mcp-everything-1",
+      "text": "List the tools this MCP server offers and try one."
+    }
+  ],
+  "apps": [
+    {
+      "id": "app-mcp-everything",
+      "name": "Everything",
+      "description": "The everything test server: tools, resources and prompts for verifying an MCP connection.",
+      "iconUrl": null,
+      "server": {
+        "name": "mcp-everything",
+        "transport": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-everything"
+        ]
+      }
+    }
+  ],
+  "skills": [],
+  "websiteUrl": null,
+  "privacyPolicyUrl": null,
+  "termsUrl": null,
+  "iconUrl": null
+}

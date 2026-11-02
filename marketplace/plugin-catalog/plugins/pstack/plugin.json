@@ -1,0 +1,36 @@
+{
+  "slug": "pstack",
+  "name": "PSTACK",
+  "tagline": "52 working-method skills for engineering, writing and thinking",
+  "description": "PSTACK is a pack of working methods: sketch before code, prove it works, attack the premise, subtract before you add. Each skill teaches one discipline an agent applies on request or on its own — architect, tdd, unslop, technical-writing, and the full set of principles. Install once; every skill lands in the agent's workspace as its own folder.",
+  "category": "productivity",
+  "creatorName": "OpenBot",
+  "version": "1.0.0",
+  "prompts": [
+    {
+      "id": "prompt-architect",
+      "text": "Architect this feature before writing any code."
+    },
+    {
+      "id": "prompt-unslop",
+      "text": "Review this UI copy with the unslop skill and rewrite the slop."
+    },
+    {
+      "id": "prompt-principle",
+      "text": "Use the subtract-before-you-add principle to shrink this module."
+    }
+  ],
+  "apps": [],
+  "skills": [
+    {
+      "id": "preset-pstack",
+      "slug": "pstack",
+      "name": "PSTACK",
+      "description": "52 working-method skills: architect, tdd, unslop, technical-writing and the principle set."
+    }
+  ],
+  "websiteUrl": null,
+  "privacyPolicyUrl": null,
+  "termsUrl": null,
+  "iconUrl": null
+}

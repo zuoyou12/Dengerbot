@@ -1,0 +1,32 @@
+{
+  "slug": "presentations",
+  "name": "Presentations",
+  "tagline": "Compose slide decks with clean structure and layout",
+  "description": "Presentation skills: outline a story, lay out slides, and produce a deck that reads well on a screen instead of a wall of bullets.",
+  "category": "documents",
+  "creatorName": "Z.ai",
+  "version": "1.0.0",
+  "prompts": [
+    {
+      "id": "prompt-presentations-1",
+      "text": "Turn this design doc into a 10-slide deck."
+    },
+    {
+      "id": "prompt-presentations-2",
+      "text": "Rebuild these slides with a cleaner narrative."
+    }
+  ],
+  "apps": [],
+  "skills": [
+    {
+      "id": "preset-presentations",
+      "slug": "presentations",
+      "name": "Presentations",
+      "description": "2 skills"
+    }
+  ],
+  "websiteUrl": null,
+  "privacyPolicyUrl": null,
+  "termsUrl": null,
+  "iconUrl": null
+}

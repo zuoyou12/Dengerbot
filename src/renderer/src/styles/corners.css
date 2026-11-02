@@ -1,0 +1,67 @@
+/* Continuous corners: the major rounded surfaces get a superellipse curve, so the meeting of
+ * curve and straight edge loses its faint crease (the iOS feel). Progressive enhancement —
+ * Chromium 139+ renders it, every other engine keeps the plain border-radius. Pill, dot and
+ * avatar shapes stay fully round and are deliberately not listed here; new major surfaces
+ * (marketplace cards and alike) join the list as they land. */
+@supports (corner-shape: superellipse(1.25)) {
+  /* radius-card (14px) */
+  .ui-card,
+  .ui-item-group,
+  .ui-dialog-content,
+  .conversation-interaction-card,
+  .task-list,
+  .trace,
+  .subagents-list,
+  .ui-block-options,
+  .custom-provider-dialog,
+  .whats-new-notice,
+  .server-mcp-empty,
+  .skill-preview-request,
+  .composer-notice,
+  .browser-full-card,
+  .diagram-node,
+  .account-update-island,
+  .wfn-card,
+  .wfn-group,
+  .settings-modal,
+  .browser-secret-card[data-variant="island"],
+  .chat-visual-surface,
+  /* radius-xl (20px) */
+  .skill-preview-card,
+  .ui-dialog-content.ui-confirm-dialog,
+  .profile-dialog,
+  .message-preview-dialog,
+  .opencode-key-dialog,
+  .whats-new-dialog,
+  .join-server-dialog,
+  .integration-wizard,
+  .diagram-chat,
+  /* radius-bubble (22px) */
+  .ui-bubble-content,
+  /* radius-lg (12px) */
+  .window-rail-button,
+  .settings-modal-card,
+  .composer,
+  .mention-picker,
+  .mcp-connect-card,
+  .channel-orchestrator-card,
+  .profile-card,
+  .profile-tile,
+  .sound-theme-card,
+  .message-attachment,
+  .message-data-table,
+  .ui-alert,
+  .ui-qr-code,
+  .agent-queue-panel,
+  .routine-popover,
+  .integration-logo-tile,
+  .first-agent-suggestion-card,
+  /* marketplace (radius-card cover and pages, radius-lg icon tiles) */
+  .marketplace-book-cover,
+  .marketplace-book-page,
+  .marketplace-book-board,
+  .marketplace-book-cover-icon,
+  .marketplace-detail-head-icon {
+    corner-shape: superellipse(1.25);
+  }
+}

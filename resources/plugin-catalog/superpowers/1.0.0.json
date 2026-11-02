@@ -1,0 +1,20 @@
+{
+  "slug": "superpowers",
+  "name": "Superpowers",
+  "tagline": "14 engineering-method skills: brainstorming, TDD, debugging, planning",
+  "description": "The well-known Superpowers collection: brainstorm before building, test-driven development, systematic debugging, writing plans, subagent-driven work and more. Each skill is one discipline the agent applies on request.",
+  "category": "coding",
+  "creatorName": "Z.ai",
+  "iconUrl": null,
+  "version": "1.0.0",
+  "prompts": [
+    { "id": "prompt-superpowers-1", "text": "Brainstorm approaches for this feature before writing code." },
+    { "id": "prompt-superpowers-2", "text": "Use test-driven development for this module." },
+    { "id": "prompt-superpowers-3", "text": "Debug this failure systematically, not by guessing." }
+  ],
+  "apps": [],
+  "skills": [{ "id": "preset-superpowers", "slug": "superpowers", "name": "Superpowers", "description": "14 skills" }],
+  "websiteUrl": null,
+  "privacyPolicyUrl": null,
+  "termsUrl": null
+}

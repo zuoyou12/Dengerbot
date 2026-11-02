@@ -1,0 +1,26 @@
+{
+  "slug": "anthropic-creative",
+  "name": "Creative Studio (Anthropic)",
+  "tagline": "Generative art, canvas design, theme systems and GIF creation",
+  "description": "Four creative skills from Anthropic: algorithmic-art generates art from code, canvas-design composes visual artwork, theme-factory builds consistent color and type themes, and slack-gif-creator makes animated reactions.",
+  "category": "design",
+  "creatorName": "Anthropic",
+  "iconUrl": null,
+  "version": "1.0.0",
+  "prompts": [
+    { "id": "prompt-anthropic-creative-1", "text": "Create generative art for this album cover." },
+    { "id": "prompt-anthropic-creative-2", "text": "Design a theme for our product from our logo colors." }
+  ],
+  "apps": [],
+  "skills": [
+    {
+      "id": "preset-anthropic-creative",
+      "slug": "anthropic-creative",
+      "name": "Creative Studio (Anthropic)",
+      "description": "4 skills"
+    }
+  ],
+  "websiteUrl": "https://github.com/anthropics/skills",
+  "privacyPolicyUrl": null,
+  "termsUrl": null
+}

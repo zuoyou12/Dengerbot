@@ -1,0 +1,19 @@
+{
+  "slug": "documents",
+  "name": "Documents",
+  "tagline": "Create and edit DOCX, XLSX, PPTX and text documents",
+  "description": "Office-document skills: produce and revise Word, Excel and PowerPoint files, and work with plain text documents, following format conventions that survive real editors.",
+  "category": "documents",
+  "creatorName": "Z.ai",
+  "iconUrl": null,
+  "version": "1.0.0",
+  "prompts": [
+    { "id": "prompt-documents-1", "text": "Draft a project one-pager as a Word document." },
+    { "id": "prompt-documents-2", "text": "Turn this table into an Excel sheet with formulas." }
+  ],
+  "apps": [],
+  "skills": [{ "id": "preset-documents", "slug": "documents", "name": "Documents", "description": "2 skills" }],
+  "websiteUrl": null,
+  "privacyPolicyUrl": null,
+  "termsUrl": null
+}

@@ -1,0 +1,92 @@
+import { defineMessages } from "../../message";
+
+export const messages = defineMessages("update", {
+  // The app update button in Settings, one label for each updater phase.
+  "update.action.check": "Check for updates",
+  "update.action.checking": "Checking for updates…",
+  "update.action.download": "Download update",
+  "update.action.downloading": "Downloading update…",
+  "update.action.restart": "Restart to update",
+  "update.action.restarting": "Restarting…",
+  "update.action.retryDownload": "Retry download",
+  "update.managedByHost": "Managed by host",
+  "update.upToDate": "Up to date",
+
+  // The provider CLI update notification.
+  "update.provider.update": "Update",
+  "update.provider.upToDate": "{name} is up to date",
+  "update.provider.checking": "Checking for {name} updates",
+  "update.provider.available": "{name} update available",
+  "update.provider.updating": "Updating {name}",
+  "update.provider.waiting": "Waiting to update {name}",
+  "update.provider.failed": "{name} update failed",
+  "update.provider.settingUp": "Setting up",
+  "update.provider.failedRetry": "The update failed. Try again.",
+  "update.provider.unknownVersion": "unknown version",
+  "update.provider.remoteHost": "Provider CLI updates run on the computer that hosts them.",
+  "update.provider.unavailable": "Provider updates are unavailable.",
+  "update.provider.downloadsUnavailable": "Provider downloads are unavailable.",
+  "update.provider.startFailed": "The update could not start. Try again.",
+  "update.provider.showDetails": "Show details",
+  "update.provider.hideDetails": "Hide details",
+
+  // An update that an admin of this server asked for. {name} is the admin.
+  "update.scheduled.title": "{name} scheduled an Dengerbot update",
+  // The same notice when "Install updates automatically" scheduled the restart.
+  "update.scheduled.automaticTitle": "Dengerbot installs an update",
+  "update.scheduled.whenIdle": "Dengerbot restarts when the agents are idle.",
+  "update.scheduled.now": "Dengerbot restarts when the update is downloaded.",
+  "update.scheduled.cancel": "Cancel update",
+  "update.scheduled.cancelFailed": "The update could not be cancelled.",
+
+  // A restart that the user of this computer asked for. It waits until no work runs.
+  "update.idleRestart.relaunchTitle": "Dengerbot restarts when the agents are idle",
+  "update.idleRestart.updateTitle": "Dengerbot installs the update when the agents are idle",
+  "update.idleRestart.description": "New routine runs wait until the restart.",
+  "update.idleRestart.waitingFor": "Waiting for {reasons}.",
+  "update.idleRestart.cancel": "Cancel restart",
+  "update.idleRestart.cancelFailed": "The restart could not be cancelled.",
+  "update.idleRestart.requestFailed": "The restart could not be scheduled.",
+  "update.idleRestart.failedTitle": "Dengerbot did not restart",
+
+  // The "What's new" dialog after an app update.
+  "update.whatsNew.title": "What’s new in Dengerbot",
+  "update.whatsNew.description": "The new features and changes in this version of Dengerbot.",
+  "update.whatsNew.version": "Version {version}",
+  "update.whatsNew.updatedFrom": "Updated from {from} to {to}",
+  "update.whatsNew.group.added": "New",
+  "update.whatsNew.group.changed": "Improved",
+  "update.whatsNew.group.fixed": "Fixed",
+  "update.whatsNew.notices": "Do this after the update",
+  "update.whatsNew.showFixes": { one: "Show {count} fix", other: "Show {count} fixes" },
+  "update.whatsNew.hideFixes": "Hide fixes",
+  "update.whatsNew.loading": "Loading the release notes…",
+  "update.whatsNew.failed.title": "The release notes did not load",
+  "update.whatsNew.failed.body":
+    "Make sure that you are online and try again. The full changelog also shows all changes.",
+  "update.whatsNew.empty.title": "No new features in this version",
+  "update.whatsNew.empty.body": "This version has no notes to show here. The full changelog shows all changes.",
+  "update.whatsNew.releases": "Releases",
+  "update.whatsNew.latest": "Latest",
+  "update.whatsNew.noReleases": "No releases yet.",
+  "update.whatsNew.catalogFailed": "The GitHub release list could not load.",
+  "update.whatsNew.offlineNotes": "Showing bundled historical notes. These may describe earlier OpenBot releases.",
+  "update.whatsNew.truncated": "Showing up to 500 releases. See GitHub for the full list.",
+  "update.whatsNew.noAssets": "No downloads available.",
+  "update.whatsNew.downloadFailed": "Could not open the download.",
+  "update.whatsNew.changelog": "Full changelog",
+  "update.whatsNew.changelogFailed": "Dengerbot could not open the changelog.",
+  "update.whatsNew.done": "Got it",
+  "update.dsh.title": "DSH version and updates",
+  "update.dsh.rollback": "Use the shipped build",
+  "update.dsh.shipped": "Shipped with the app",
+  "update.dsh.installed": "Installed update",
+  "update.dsh.development": "Development dependency",
+  "update.dsh.noChannel":
+    "No DSH update source is configured. Updates cannot be checked, and this version is not confirmed to be the latest official release.",
+  "update.dsh.channelDescription": "Checks official DeepSeek Harness GitHub releases, including prereleases.",
+  "update.dsh.channelUpToDate": "This is the latest official DSH release found.",
+  "update.dsh.nextSession":
+    "The selected version applies to new DeepSeek sessions. Restart Dengerbot to reconnect existing sessions.",
+  "update.dsh.failed": "DeepSeek update failed. Please try again.",
+});
