@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "OpenBot",
-    "slug": "openbot",
+    "name": "Dengerbot",
+    "slug": "dengerbot",
     "platforms": ["ios", "android"],
     "version": "1.4.5",
     "orientation": "portrait",
@@ -9,11 +9,10 @@
     "scheme": "openbot",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "run.openbot.mobile",
+      "bundleIdentifier": "run.dengerbot.mobile",
       "supportsTablet": true,
-      "associatedDomains": ["applinks:openbot.run"],
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Allow OpenBot to connect to your desktop during local development.",
+        "NSLocalNetworkUsageDescription": "Allow Dengerbot to connect to your desktop during local development.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },
@@ -22,7 +21,7 @@
       "icon": "./assets/icons/app-icon.icon"
     },
     "android": {
-      "package": "run.openbot.mobile",
+      "package": "run.dengerbot.mobile",
       "icon": "./assets/icons/app-icon.png",
       "predictiveBackGestureEnabled": false,
       "permissions": ["android.permission.CAMERA"],
@@ -120,8 +119,8 @@
         {
           "ios": {
             "enabled": true,
-            "appGroupId": "group.run.openbot.mobile",
-            "extensionBundleIdentifier": "run.openbot.mobile.ShareExtension",
+            "appGroupId": "group.run.dengerbot.mobile",
+            "extensionBundleIdentifier": "run.dengerbot.mobile.ShareExtension",
             "activationRule": {
               "supportsText": true,
               "supportsWebUrlWithMaxCount": 1,
@@ -203,8 +202,8 @@
       [
         "expo-widgets",
         {
-          "bundleIdentifier": "run.openbot.mobile.ExpoWidgetsTarget",
-          "groupIdentifier": "group.run.openbot.mobile",
+          "bundleIdentifier": "run.dengerbot.mobile.ExpoWidgetsTarget",
+          "groupIdentifier": "group.run.dengerbot.mobile",
           "enablePushNotifications": true,
           "frequentUpdates": true
         }
@@ -213,8 +212,8 @@
         "./plugins/with-notification-service",
         {
           "targetName": "OpenBotNotificationService",
-          "bundleIdentifier": "run.openbot.mobile.NotificationService",
-          "groupIdentifier": "group.run.openbot.mobile"
+          "bundleIdentifier": "run.dengerbot.mobile.NotificationService",
+          "groupIdentifier": "group.run.dengerbot.mobile"
         }
       ]
     ],

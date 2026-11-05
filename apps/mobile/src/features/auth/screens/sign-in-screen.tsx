@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { mobileAnalytics } from "@/features/analytics/mobile-analytics";
 import { type MobileSession, redeemMobileConnectUrl } from "@/features/auth/api/mobile-auth";
 import type { EmailCodeInputHandle } from "@/features/auth/components/email-code-input";
+import { ManualPairing } from "@/features/auth/components/manual-pairing";
 import { QrScanner, type ScannerMode, type ScanStatus } from "@/features/auth/components/qr-scanner";
 import {
   PANE_ENTER_DELAY_MS,
@@ -110,7 +111,7 @@ function SignInNoticeBanner({ notice }: { notice: SignInNotice }) {
   );
 }
 
-type PaneKey = SignInStep | "none";
+type PaneKey = SignInStep | "manual" | "none";
 
 function enterFrom(from: PaneKey, to: PaneKey): PaneDirection {
   if (from === "email" && to === "code") return "right";
@@ -181,6 +182,7 @@ export function SignInScreen({ notice }: { notice?: SignInNotice }) {
   const scanBusy = scan?.status === "connecting";
   const openScanner = useCallback(() => {
     Keyboard.dismiss();
+    setManualOpen(false);
     setScan({ mode: "pending", status: "idle" });
     setScannerMounted(true);
   }, []);
@@ -309,13 +311,23 @@ export function SignInScreen({ notice }: { notice?: SignInNotice }) {
     else look(-22 + Math.min(codeLength, 7) * 6.4, 9);
   }, [codeLength, emailLength, look, looking, step]);
 
+  // The paste-a-link pane: an overlay step of the options pane, dismissed by the scanner or a pairing.
+  const [manualOpen, setManualOpen] = useState(false);
   // The pane on the screen follows the target one render later, so the leaving pane knows where
   // the next one comes from and leaves the other way.
-  const target: PaneKey = !revealed || finished || scan || scannerMounted ? "none" : step;
+  const target: PaneKey =
+    manualOpen && !finished && !scan && !scannerMounted
+      ? "manual"
+      : !revealed || finished || scan || scannerMounted
+        ? "none"
+        : step;
   const [pane, setPane] = useState<{ key: PaneKey; from: PaneDirection }>({ key: "none", from: "vertical" });
   useEffect(() => {
     if (pane.key !== target) setPane({ key: target, from: enterFrom(pane.key, target) });
   }, [pane.key, target]);
+  useEffect(() => {
+    if (finished) setManualOpen(false);
+  }, [finished]);
   const exit = paneExit(exitTo(pane.key, target), reduced);
   const motion: PaneMotion = {
     from: pane.from,
@@ -426,9 +438,16 @@ export function SignInScreen({ notice }: { notice?: SignInNotice }) {
               helpShift={helpShift}
               onToggleHelp={() => setHelpOpen((open) => !open)}
               onScan={openScanner}
-              onEmail={signIn.openEmail}
+              onManualLink={() => setManualOpen(true)}
               reduced={reduced}
             />
+          </Animated.View>
+        ) : null}
+        {pane.key === "manual" ? (
+          <Animated.View key="manual" exiting={exit} style={[column, { top: formTop }]}>
+            <Animated.View style={liftStyle}>
+              <ManualPairing motion={motion} onDone={setFinished} onScanInstead={openScanner} reduced={reduced} />
+            </Animated.View>
           </Animated.View>
         ) : null}
         {pane.key === "email" ? (

@@ -45,7 +45,7 @@ export interface PaneMotion {
 }
 
 /** One element of a pane. The elements come in one after another. */
-function PaneItem({
+export function PaneItem({
   index,
   motion,
   className,
@@ -67,7 +67,7 @@ function PaneItem({
 }
 
 /** A full-width sign-in button. The lilac one is the main action; the gray one the other choice. */
-function SignInButton({
+export function SignInButton({
   label,
   labelKey = label,
   brand,
@@ -130,7 +130,7 @@ function SignInButton({
 }
 
 /** A quiet text action, such as "Change email". */
-function TextAction({
+export function TextAction({
   label,
   labelKey = label,
   onPress,
@@ -284,7 +284,7 @@ export function OptionsPane({
   helpShift,
   onToggleHelp,
   onScan,
-  onEmail,
+  onManualLink,
   onLayout,
   onHelpLayout,
   reduced,
@@ -296,7 +296,7 @@ export function OptionsPane({
   helpShift: SharedValue<number>;
   onToggleHelp: () => void;
   onScan: () => void;
-  onEmail: () => void;
+  onManualLink: () => void;
   onLayout?: (height: number) => void;
   onHelpLayout?: (height: number) => void;
   reduced: boolean;
@@ -320,7 +320,12 @@ export function OptionsPane({
       </PaneItem>
       <PaneItem index={2} motion={motion} className="mt-7 gap-3">
         <SignInButton brand icon={ScanLine} label={t("mobile.auth.scanQrCode")} onPress={onScan} reduced={reduced} />
-        <SignInButton brand={false} label={t("mobile.auth.signIn.emailButton")} onPress={onEmail} reduced={reduced} />
+        <SignInButton
+          brand={false}
+          label={t("mobile.auth.signIn.manualButton")}
+          onPress={onManualLink}
+          reduced={reduced}
+        />
       </PaneItem>
       <PaneItem index={3} motion={motion}>
         <HelpToggle open={helpOpen} onToggle={onToggleHelp} onBodyLayout={onHelpLayout} reduced={reduced} />

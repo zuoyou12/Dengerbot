@@ -12,7 +12,10 @@ import {
 } from "@/features/settings/components/settings-content";
 import { useText } from "@/shared/lib/text";
 
-const PRODUCT_NAME = "OpenBot";
+const PRODUCT_NAME = "Dengerbot";
+// The fork has no website of its own: the upstream resources section is gone, and the repository
+// stands in for it.
+const REPOSITORY_URL = "https://github.com/zuoyou12/Dengerbot";
 
 export function AboutSettingsScreen() {
   const { t } = useText();
@@ -28,11 +31,8 @@ export function AboutSettingsScreen() {
   return (
     <SettingsContent>
       <SettingsSection title={t("mobile.settings.about.resources")}>
-        <SettingsRow onPress={() => open("https://openbot.run")}>
+        <SettingsRow onPress={() => open(REPOSITORY_URL)}>
           <Typography.Paragraph>{t("mobile.settings.about.website")}</Typography.Paragraph>
-        </SettingsRow>
-        <SettingsRow onPress={() => open("https://openbot.run/privacy-policy")}>
-          <Typography.Paragraph>{t("mobile.settings.about.privacy")}</Typography.Paragraph>
         </SettingsRow>
         {error ? <SettingsNote>{error}</SettingsNote> : null}
       </SettingsSection>

@@ -13,10 +13,7 @@ import { formatSupportLogEntry, type SupportLogLevel, supportLog } from "@/featu
 import { clearSupportLog, supportLogFileText } from "@/features/support/model/support-log-capture";
 import { useText } from "@/shared/lib/text";
 
-/** The OpenBot account, the same contact as the website. */
-const SUPPORT_X_HANDLE = "@OpenBot_";
-const SUPPORT_X_URL = "https://x.com/OpenBot_";
-const ISSUES_URL = "https://github.com/nightly-labs/openbot/issues/new";
+const ISSUES_URL = "https://github.com/zuoyou12/Dengerbot/issues/new";
 /** The screen shows the newest events. The saved file has all of them. */
 const SHOWN_ENTRIES = 100;
 const LEVEL_CLASS = {
@@ -44,7 +41,7 @@ export function SupportSettingsScreen() {
       return;
     }
     setSaving(true);
-    const file = new File(Paths.cache, `openbot-support-log-${new Date().toISOString().replace(/[:.]/gu, "-")}.txt`);
+    const file = new File(Paths.cache, `dengerbot-support-log-${new Date().toISOString().replace(/[:.]/gu, "-")}.txt`);
     try {
       file.writeSync(supportLogFileText());
       await Sharing.shareAsync(file.uri, {
@@ -72,9 +69,6 @@ export function SupportSettingsScreen() {
       <SettingsSection title={t("mobile.settings.support.help")} footer={t("mobile.settings.support.helpFooter")}>
         <SettingsRow onPress={() => open(ISSUES_URL)}>
           <Typography.Paragraph>{t("mobile.settings.support.issues")}</Typography.Paragraph>
-        </SettingsRow>
-        <SettingsRow onPress={() => open(SUPPORT_X_URL)} supportingText={SUPPORT_X_HANDLE}>
-          <Typography.Paragraph>{t("mobile.settings.support.message")}</Typography.Paragraph>
         </SettingsRow>
         {linkError ? <SettingsNote>{linkError}</SettingsNote> : null}
       </SettingsSection>
