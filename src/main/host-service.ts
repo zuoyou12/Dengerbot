@@ -180,6 +180,12 @@ interface HostServiceOptions {
   /** Whether the owner uses the desktop app on this computer now and sees the event there, so the owner's phone stays quiet. */
   hostComputerInUse?: (event: AgentEvent) => boolean;
   verifyRemoteSessionTicket?: (ticket: string) => Effect.Effect<VerifiedRemoteSessionTicket, RemoteWorkflowError>;
+  /**
+   * Whether the bearer names a live paired mobile session of this computer. The Team API and the
+   * WebRTC peer ask per request: a paired phone is the owner, and the paired DeepSeek visibility
+   * rides on exactly that.
+   */
+  isPairedOwnerSession?: (token: string | null | undefined) => boolean;
   endRemoteSession?: (sessionId: string) => Effect.Effect<void, RemoteWorkflowError>;
   remoteControlPlaneUrl?: string;
   createRemoteInvite?: (

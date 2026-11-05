@@ -40,6 +40,7 @@ import {
 import { createDshRuntimeUpdater } from "./dsh-runtime-updater";
 import { filePreviewPages } from "./file-preview-pages";
 import { hostAllowsTenantLaunch } from "./host-update-coordinator";
+import { accountIpcHandlers } from "./ipc/account-handlers";
 import { agentAdminIpcHandlers } from "./ipc/agent-admin-handlers";
 import { agentIpcHandlers } from "./ipc/agent-handlers";
 import { agentImportIpcHandlers } from "./ipc/agent-import-handlers";
@@ -523,6 +524,8 @@ function registerIpcHandlers({
   agentMemoryLimit,
   agentAccess,
   teamStore,
+  mobileConnect,
+  dshSignIn,
   serverTimezone,
   promptCacheTtl,
   remoteSessionReuse,
@@ -655,6 +658,7 @@ function registerIpcHandlers({
     ),
     ...dshRuntimeIpcHandlers(dshRuntimeUpdater),
     ...localGatewayIpcHandlers(localGateway),
+    ...accountIpcHandlers({ mobileConnect, dshSignIn }),
     ...subscriptionIpcHandlers(subscriptions, openLink),
     ...providerDetectionIpcHandlers({ detection: providerDetection, settings: providerDetectionSettings }),
     ...agentTemplateIpcHandlers({ agentTemplates }),

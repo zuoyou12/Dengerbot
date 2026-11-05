@@ -25,6 +25,7 @@ import type { AppAppearancePreference, SetAppAppearancePreferenceInput } from ".
 import type { AppInterfaceSizePreference, SetAppInterfaceSizePreferenceInput } from "./app-interface-size";
 import type { AppLanguagePreference, SetAppLanguagePreferenceInput } from "./app-language";
 import type { AppLogoColorPreference, SetAppLogoColorPreferenceInput } from "./app-logo-color";
+import type { DshAccountSignInState } from "./dsh-account";
 import type {
   AgentAdminSettings,
   AgentBackupModelSettings,
@@ -474,6 +475,7 @@ import type {
   WorkflowVersionInput,
   WorkflowWebhookSecret,
 } from "./ipc-workflows";
+import type { MobileConnectedDevice, MobileConnectPairing, MobileConnectServiceState } from "./mobile-connect";
 
 declare const payloadType: unique symbol;
 declare const resultType: unique symbol;
@@ -1540,6 +1542,20 @@ export const IPC_ENDPOINTS = {
     disconnect: request<string, void>()("remote-desktop:disconnect"),
     event: event<RemoteDesktopSession[]>()("remote-desktop:event"),
   },
+  // Pairing a phone with this computer: the QR and permanent link the settings tab shows, and the
+  // paired devices. The DSH account sign-in rides the same group because its row lives beside it.
+  auth: {
+    getState: request<undefined, MobileConnectServiceState>()("auth:get-state"),
+    createPairing: request<undefined, MobileConnectPairing>()("auth:create-pairing"),
+    createPermanentLink: request<undefined, MobileConnectPairing>()("auth:create-permanent-link"),
+    listDevices: request<undefined, readonly MobileConnectedDevice[]>()("auth:list-devices"),
+    revokeDevice: request<string, void>()("auth:revoke-device"),
+    unpairAll: request<undefined, void>()("auth:unpair-all"),
+    devicesChanged: event<readonly MobileConnectedDevice[]>()("auth:devices-changed"),
+    getDshAccount: request<undefined, DshAccountSignInState>()("auth:get-dsh-account"),
+    startDshSignIn: request<undefined, void>()("auth:start-dsh-sign-in"),
+    cancelDshSignIn: request<undefined, void>()("auth:cancel-dsh-sign-in"),
+  },
 } as const;
 
 export type IpcEndpoints = typeof IPC_ENDPOINTS;
@@ -1601,6 +1617,7 @@ export const IPC_GROUP_PATHS = {
   host: "host",
   events: "events",
   remoteDesktop: "remoteDesktop",
+  auth: "",
 } as const satisfies { readonly [Group in keyof IpcEndpoints]: string | null };
 
 export type IpcGroupName = keyof IpcEndpoints;

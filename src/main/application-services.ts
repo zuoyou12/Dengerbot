@@ -104,6 +104,7 @@ import { AgentLifecycleFailed, AgentService } from "../backend/agent-service";
 import { AgentStore } from "../backend/agent-store";
 import { BrowserHost } from "../backend/browser-host";
 import { BrowserProfileStore } from "../backend/browser-profiles/browser-profile-store";
+import { dshInstall } from "../backend/cli";
 import { runCauseEffect } from "../backend/effect-boundary";
 import { MailboxStore } from "../backend/mailbox-store";
 import { McpOAuth } from "../backend/mcp-oauth-provider";
@@ -165,6 +166,7 @@ import { CustomProviderStore } from "./custom-provider-store";
 import { MCP_OAUTH_REDIRECT_URL } from "./deep-link-router";
 import { desktopShowsAgentEvent } from "./desktop-notifications";
 import { type DevelopmentRemoteRole, startDevelopmentRemoteRole } from "./development-remote-bootstrap";
+import { DshSignInService } from "./dsh-sign-in";
 import { performDynamicIslandCriticalAction } from "./dynamic-island-actions";
 import { DynamicIslandFailed, DynamicIslandWindowController, toDynamicIslandFailed } from "./dynamic-island-window";
 import {
@@ -223,6 +225,7 @@ import {
 } from "./mcp-oauth-redirect-server";
 import { McpOAuthStore } from "./mcp-oauth-store";
 import { MessagingCredentialStore } from "./messaging-credential-store";
+import { MobileConnectService } from "./mobile-connect-service";
 import { NotificationPreferenceStore } from "./notification-preference-store";
 import { OnePasswordConnectorService } from "./onepassword-connector-service";
 import { OnePasswordConnectorStore } from "./onepassword-connector-store";
@@ -408,6 +411,10 @@ const TEARDOWN_ORDER = {
   voice: 70,
   speech: 71,
   remoteDesktop: 80,
+  // The LAN HTTP server and the sign-in child: before the host, so a revoke that arrives while
+  // stopping never races a host that is already gone.
+  dshSignIn: 82,
+  mobileConnect: 83,
   // Before messaging, so no routine answer starts a post while the connections stop.
   routineResults: 84,
   // Before the host and the service: no new external message arrives while they stop.
@@ -446,6 +453,21 @@ const TEARDOWN_ORDER = {
   // Last: every step above can still write.
   database: 130,
 } as const;
+
+/**
+ * The Node launcher the DSH sign-in window runs under. DSH refuses the Electron runtime, so this is
+ * a real Node: the one configured, else the Node the installer shipped, else whatever `node` is on
+ * the PATH. The same fallback chain `createDshRuntimeUpdater` uses.
+ */
+function dshNodeExecutable(): string {
+  const configured = process.env.OPENBOT_DEEPSEEK_NODE?.trim();
+  if (configured) return configured;
+  const shipped = process.resourcesPath
+    ? join(process.resourcesPath, "node", process.platform === "win32" ? "node.exe" : "node")
+    : null;
+  if (shipped && existsSync(shipped)) return shipped;
+  return "node";
+}
 
 export interface ApplicationServiceContext {
   /**
@@ -570,6 +592,10 @@ export interface ApplicationServices {
   trace: TraceFile;
   resourceMonitor: ResourceMonitor;
   teamStore: TeamStore;
+  /** The local QR-pairing service: the settings tab's Mobile Connect controls and its data. */
+  mobileConnect: MobileConnectService;
+  /** The DeepSeek account sign-in window the settings row opens and closes. */
+  dshSignIn: DshSignInService;
 }
 
 /** How the driver's own state reads as the capability the Team API projects. */
@@ -2018,6 +2044,69 @@ export async function createApplicationServices({
   const providerHostSignIns = process.platform === "linux" ? providerSignIns : undefined;
   const pushNotificationStore = new PushNotificationStore(join(app.getPath("userData"), PUSH_NOTIFICATION_FILE));
   await runCauseEffect(pushNotificationStore.load());
+  // The local mobile-connect service: the QR pairing, the /v2/remote control plane and the Signal
+  // tickets, all signed by one key in its state file. The host's own ticket comes from here too,
+  // through the `issueRemoteHostTicket` option below, so host and phones share one signing identity.
+  // The DSH account bridge handoff lives beside the provider state the DSH runtime already uses.
+  const providerStateDirectory = join(app.getPath("userData"), "provider-state");
+  const dshHome = join(providerStateDirectory, "dsh");
+  // The host does not exist yet, and a device revoke ends one of its sessions; the holder closes
+  // that gap, and every revoke before startup ends finds the host gone and skips the disconnect.
+  const hostHolder: { current: HostService | null } = { current: null };
+  const mobileConnect = new MobileConnectService({
+    stateDirectory: join(app.getPath("userData"), "mobile-connect"),
+    enabled: process.env.DENGERBOT_MOBILE_CONNECT?.trim().toLowerCase() !== "off",
+    signalOrigin: process.env.DENGERBOT_SIGNAL_ORIGIN?.trim() || null,
+    dshHome,
+    hostIdentity: () => {
+      const identity = teamStore.getIdentity();
+      if (!identity) return null;
+      const ownerMembershipId = teamStore.getOwnerMemberId();
+      if (!ownerMembershipId) return null;
+      return {
+        hostId: identity.serverId,
+        name: identity.serverName,
+        devicePublicKey: identity.publicKey,
+        fingerprint: identity.fingerprint,
+        ownerMembershipId,
+      };
+    },
+    revokeRemoteSession: (sessionId) => {
+      const current = hostHolder.current;
+      if (!current) return Promise.resolve();
+      return runCauseEffect(current.revokeSession(sessionId));
+    },
+    log: (message) => {
+      Effect.runFork(
+        appendRemoteDiagnosticLog(join(app.getPath("userData"), "logs", "account"), "mobile-connect", `${message}\n`),
+      );
+    },
+    onDevicesChanged: (devices) => {
+      sendToRenderer(windows.getMainWindow(), IPC_ENDPOINTS.auth.devicesChanged, devices);
+    },
+  });
+  await mobileConnect.start();
+  teardown.push(TEARDOWN_ORDER.mobileConnect, "the mobile connect service", () => mobileConnect.stop());
+  const dshSignIn = new DshSignInService({
+    dshSpawn: () => {
+      try {
+        return { executable: dshNodeExecutable(), entry: dshInstall(providerStateDirectory).bin };
+      } catch {
+        return null;
+      }
+    },
+    dshHome,
+    isSignedIn: () => mobileConnect.readDshAccount()?.signedIn === true,
+    onPhaseChange: () => {
+      sendToRenderer(windows.getMainWindow(), IPC_ENDPOINTS.auth.devicesChanged, mobileConnect.listDevices());
+    },
+    log: (message) => {
+      Effect.runFork(
+        appendRemoteDiagnosticLog(join(app.getPath("userData"), "logs", "account"), "dsh-sign-in", `${message}\n`),
+      );
+    },
+  });
+  teardown.push(TEARDOWN_ORDER.dshSignIn, "the DeepSeek sign-in window", () => dshSignIn.stop());
   const host = new HostService({
     appVersion: app.getVersion(),
     store: teamStore,
@@ -2113,6 +2202,20 @@ export async function createApplicationServices({
     teamWebRtcBridge,
     privateNetwork: () => remoteNetworkRoute.get().route === "private",
     pushNotificationStore,
+    // The local service signs every Signal ticket, the host's and the phones'; verifying a client
+    // ticket is checking its signature against that one key.
+    issueRemoteHostTicket: () =>
+      Effect.tryPromise({
+        try: () => mobileConnect.issueHostSignalTicket(),
+        catch: (cause) => new RemoteWorkflowError({ cause }),
+      }),
+    verifyRemoteSessionTicket: (ticket: string) =>
+      Effect.tryPromise({
+        try: () => mobileConnect.verifySessionTicket(ticket),
+        catch: (cause) => new RemoteWorkflowError({ cause }),
+      }),
+    // The paired phones of this computer act as its owner; the Team API asks per request.
+    isPairedOwnerSession: (token: string | null | undefined) => mobileConnect.isPairedOwnerSession(token),
     // The owner is at this computer only with recent input, also when the window was left in focus.
     // Then the focused window shows the event, or the desktop notifies. When mute or the level of
     // this server keeps the desktop quiet about the event, the phone tells the owner.
@@ -2137,9 +2240,11 @@ export async function createApplicationServices({
         },
         catch: (cause) => new RemoteWorkflowError({ cause }),
       }),
-    // Still a function, and still throws: there is no account in this build, so nobody is signed in.
+    // The synthetic local account stands in for the deleted account service's sign-in.
     getSignedInUser: () => {
-      throw new Error("Nobody is signed in: the account service is gone.");
+      const user = mobileConnect.getSignedInUser();
+      if (!user) throw new Error("The mobile-connect service is not running.");
+      return user;
     },
     // No central ticket exists in this build, so a ticket never redeems to a user.
     redeemCentralTicket: () => Effect.succeed(null),
@@ -2200,8 +2305,9 @@ export async function createApplicationServices({
       }),
   });
   teardown.push(TEARDOWN_ORDER.host, "the local host", () => runCauseEffect(host.shutdown()));
-  // No account in this build: the host is always unbound.
-  await runCauseEffect(host.applySignedInAccount(null));
+  hostHolder.current = host;
+  // The synthetic local account binds the host across restarts, the way a signed-in account did.
+  await runCauseEffect(host.applySignedInAccount(mobileConnect.getSignedInUser()));
   const analyticsPlatform = process.platform;
   if (analyticsPlatform !== "darwin" && analyticsPlatform !== "win32" && analyticsPlatform !== "linux") {
     throw new Error(`Unsupported analytics platform: ${analyticsPlatform}`);
@@ -2686,5 +2792,7 @@ export async function createApplicationServices({
     trace,
     resourceMonitor,
     teamStore,
+    mobileConnect,
+    dshSignIn,
   };
 }

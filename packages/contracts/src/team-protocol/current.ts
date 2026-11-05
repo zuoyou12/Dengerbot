@@ -117,6 +117,13 @@ export const TEAM_MEMBER_LEAVE_CAPABILITY = "member-leave-v1";
  * capability string.
  */
 export const TEAM_QUEUE_WINDOW_CAPABILITY = "queue-window-v1";
+/**
+ * Frozen optional paired-deepseek-v1 contract: a host that verifies a paired owner session may list
+ * its DeepSeek (DSH) assistant to that session alone. The capability rides protocol 8 or newer, and
+ * a host that does not verify the pairing must not advertise it. Widening any of it needs a second
+ * capability string.
+ */
+export const TEAM_PAIRED_DEEPSEEK_CAPABILITY = "paired-deepseek-v1";
 export {
   ACP_REGISTRY_CAPABILITY,
   AGENT_ACCESS_CAPABILITY,
@@ -300,6 +307,7 @@ export const TEAM_CURRENT_CAPABILITIES = [
   CLAUDE_API_KEY_CAPABILITY,
   WORKFLOWS_CAPABILITY,
   AGENT_THREADS_CAPABILITY,
+  TEAM_PAIRED_DEEPSEEK_CAPABILITY,
 ] as const;
 
 export type TeamCurrentCapability = (typeof TEAM_CURRENT_CAPABILITIES)[number];
@@ -417,11 +425,15 @@ export const TEAM_BOOTSTRAP_CAPABILITIES = TEAM_CURRENT_CAPABILITIES.filter(
     capability !== PROMPT_CACHE_TTL_CAPABILITY &&
     capability !== CLAUDE_API_KEY_CAPABILITY &&
     capability !== WORKFLOWS_CAPABILITY &&
-    capability !== AGENT_THREADS_CAPABILITY,
+    capability !== AGENT_THREADS_CAPABILITY &&
+    capability !== TEAM_PAIRED_DEEPSEEK_CAPABILITY,
 );
 // A v7 host does not know the v8 markers, so a client sends them only after it negotiates protocol 8.
 const TEAM_PROTOCOL_V7_CURRENT_CAPABILITIES = TEAM_CURRENT_CAPABILITIES.filter(
-  (capability) => capability !== TEAM_OPEN_PROVIDERS_CAPABILITY && capability !== PROVIDERS_V8_CAPABILITY,
+  (capability) =>
+    capability !== TEAM_OPEN_PROVIDERS_CAPABILITY &&
+    capability !== PROVIDERS_V8_CAPABILITY &&
+    capability !== TEAM_PAIRED_DEEPSEEK_CAPABILITY,
 );
 export function teamCapabilitiesForProtocol(protocol: number | null | undefined): readonly TeamCurrentCapability[] {
   if (protocol === null || protocol === undefined || protocol < 7) return TEAM_BOOTSTRAP_CAPABILITIES;
@@ -478,6 +490,7 @@ export function legacyTeamCapabilities(capabilities: readonly string[]): string[
       capability !== PROMPT_CACHE_TTL_CAPABILITY &&
       capability !== CLAUDE_API_KEY_CAPABILITY &&
       capability !== WORKFLOWS_CAPABILITY &&
-      capability !== AGENT_THREADS_CAPABILITY,
+      capability !== AGENT_THREADS_CAPABILITY &&
+      capability !== TEAM_PAIRED_DEEPSEEK_CAPABILITY,
   );
 }

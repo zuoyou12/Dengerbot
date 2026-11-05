@@ -2209,7 +2209,27 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
     browser: mockBrowser.browser,
     update: {
       getReleasePage: async () => "https://github.com/zuoyou12/Dengerbot/releases",
-      getReleases: async () => JSON.stringify({ truncated: false, repository: "zuoyou12/Dengerbot", latest: { tag_name: `v${updateStatus.currentVersion}` }, releases: [{ tag_name: `v${updateStatus.currentVersion}`, published_at: "2026-01-01T00:00:00Z", body: "- New features and fixes.", draft: false, prerelease: false, assets: [{ name: "Dengerbot-setup.exe", browser_download_url: `https://github.com/zuoyou12/Dengerbot/releases/download/v${updateStatus.currentVersion}/Dengerbot-setup.exe` }] }] }),
+      getReleases: async () =>
+        JSON.stringify({
+          truncated: false,
+          repository: "zuoyou12/Dengerbot",
+          latest: { tag_name: `v${updateStatus.currentVersion}` },
+          releases: [
+            {
+              tag_name: `v${updateStatus.currentVersion}`,
+              published_at: "2026-01-01T00:00:00Z",
+              body: "- New features and fixes.",
+              draft: false,
+              prerelease: false,
+              assets: [
+                {
+                  name: "Dengerbot-setup.exe",
+                  browser_download_url: `https://github.com/zuoyou12/Dengerbot/releases/download/v${updateStatus.currentVersion}/Dengerbot-setup.exe`,
+                },
+              ],
+            },
+          ],
+        }),
       getStatus: async () => clone(updateStatus),
       check: async () => {
         updateStatus = { ...updateStatus, phase: "up-to-date", availableVersion: null };
@@ -2428,6 +2448,32 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
       discard: async () => undefined,
     },
     remoteDesktop: mockTeam.remoteDesktop,
+    // The preview has no phone and no DSH installation: an empty device list and an idle account.
+    getState: async () => ({
+      enabled: true,
+      apiUrl: "http://192.168.1.10:47822",
+      signalUrl: "ws://192.168.1.10:8088/v1/signal",
+      devices: [],
+    }),
+    createPairing: async () => ({
+      link: "openbot://mobile-connect?api=http%3A%2F%2F192.168.1.10%3A47822&ticket=preview",
+      apiUrl: "http://192.168.1.10:47822",
+      ticket: "preview",
+      expiresAt: null,
+    }),
+    createPermanentLink: async () => ({
+      link: "openbot://mobile-connect?api=http%3A%2F%2F192.168.1.10%3A47822&ticket=preview",
+      apiUrl: "http://192.168.1.10:47822",
+      ticket: "preview",
+      expiresAt: null,
+    }),
+    listDevices: async () => [],
+    onDevicesChanged: () => () => undefined,
+    revokeDevice: async () => undefined,
+    unpairAll: async () => undefined,
+    getDshAccount: async () => ({ phase: "idle", account: null }),
+    startDshSignIn: async () => undefined,
+    cancelDshSignIn: async () => undefined,
     // The preview has no runtime update channel: it shows the version this build runs.
     dshRuntime: {
       getStatus: async () => ({
@@ -2592,7 +2638,30 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
       get: async (_id) => undefined,
       getListing: async (_id) => undefined,
       install: async (input) => ({
-        agent: { id: `installed-${input.listingId}`, name: "Test Agent", title: "Test", description: "", avatarSeed: "test", avatarHue: null, avatarUrl: null, notifications: false, model: "deepseek-chat", reasoningEffort: "low", threadId: "default", workspacePath: "/tmp/test", preview: "", updatedAt: new Date().toISOString(), provider: "deepseek", marketplaceSource: { listingId: input.listingId, versionId: `${input.listingId}@1`, version: 1, skillIds: [], routineIds: [] } },
+        agent: {
+          id: `installed-${input.listingId}`,
+          name: "Test Agent",
+          title: "Test",
+          description: "",
+          avatarSeed: "test",
+          avatarHue: null,
+          avatarUrl: null,
+          notifications: false,
+          model: "deepseek-chat",
+          reasoningEffort: "low",
+          threadId: "default",
+          workspacePath: "/tmp/test",
+          preview: "",
+          updatedAt: new Date().toISOString(),
+          provider: "deepseek",
+          marketplaceSource: {
+            listingId: input.listingId,
+            versionId: `${input.listingId}@1`,
+            version: 1,
+            skillIds: [],
+            routineIds: [],
+          },
+        },
       }),
     },
   };

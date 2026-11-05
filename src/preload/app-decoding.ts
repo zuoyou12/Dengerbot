@@ -4,6 +4,7 @@
 // Each decoder checks every field the contract type requires and keeps each optional field it
 // carries, so a value the renderer reads always has the shape its type says.
 
+import type { DshAccountInfo, DshAccountSignInState } from "@openbot/contracts/dsh-account";
 import {
   AGENT_DEFAULT_KEYS,
   type AgentDefaults,
@@ -60,7 +61,6 @@ import {
   type NotificationPreference,
   type OnePasswordConnectorStatus,
   type ProviderDetectionSettings,
-  type TestProviderApiKeyResult,
   parseGitHubConnectorRepositories,
   parseGitHubConnectorStatus,
   parseOnePasswordConnectorStatus,
@@ -72,6 +72,7 @@ import {
   type SpeechAudio,
   type SpeechModelStatus,
   type SpeechSettings,
+  type TestProviderApiKeyResult,
   UPDATE_PHASES,
   type UpdatePreference,
   type UpdateStatus,
@@ -90,8 +91,14 @@ import {
   nullableNumber,
   nullableString,
   requiredBoolean,
+  requiredNumber,
   requiredString,
 } from "@openbot/contracts/ipc-decoding";
+import type {
+  MobileConnectedDevice,
+  MobileConnectPairing,
+  MobileConnectServiceState,
+} from "@openbot/contracts/mobile-connect";
 import { isPluginSlug } from "@openbot/contracts/plugin-links";
 import { isBoolean, isNumber, isOneOf, isString } from "@openbot/contracts/runtime-values";
 
@@ -469,4 +476,70 @@ export function decodeTestProviderApiKeyResult(value: unknown): TestProviderApiK
     return { ok: true, models: record.models };
   }
   return { ok: false, error: requiredString(record, "error") };
+}
+
+// The auth group: the mobile-connect pairing state and the DeepSeek account sign-in.
+
+function decodeMobileConnectedDevice(value: unknown): MobileConnectedDevice {
+  const record = decodeRecord(value, "paired device");
+  const platform = requiredString(record, "platform");
+  if (platform !== "ios" && platform !== "android" && platform !== "unknown") {
+    throw new Error("Invalid paired device platform.");
+  }
+  return {
+    sessionId: requiredString(record, "sessionId"),
+    name: requiredString(record, "name"),
+    platform,
+    connectedAt: requiredNumber(record, "connectedAt"),
+    lastActiveAt: requiredNumber(record, "lastActiveAt"),
+    via: record.via === "link" ? "link" : "code",
+  };
+}
+
+export function decodeMobileConnectedDevices(value: unknown): readonly MobileConnectedDevice[] {
+  return decodeList(value, "paired device list", decodeMobileConnectedDevice);
+}
+
+export function decodeMobileConnectServiceState(value: unknown): MobileConnectServiceState {
+  const record = decodeRecord(value, "mobile connect state");
+  return {
+    enabled: requiredBoolean(record, "enabled"),
+    apiUrl: nullableString(record, "apiUrl"),
+    signalUrl: nullableString(record, "signalUrl"),
+    devices: decodeMobileConnectedDevices(record.devices),
+  };
+}
+
+export function decodeMobileConnectPairing(value: unknown): MobileConnectPairing {
+  const record = decodeRecord(value, "mobile connect pairing");
+  return {
+    link: requiredString(record, "link"),
+    apiUrl: requiredString(record, "apiUrl"),
+    ticket: requiredString(record, "ticket"),
+    expiresAt: nullableNumber(record, "expiresAt"),
+  };
+}
+
+function decodeDshAccount(value: unknown): DshAccountInfo {
+  const record = decodeRecord(value, "DeepSeek account");
+  return {
+    signedIn: requiredBoolean(record, "signedIn"),
+    name: nullableString(record, "name"),
+    avatarUrl: nullableString(record, "avatarUrl"),
+    currency: nullableString(record, "currency"),
+    balance: nullableString(record, "balance"),
+    updatedAt: requiredNumber(record, "updatedAt"),
+  };
+}
+
+export function decodeDshAccountSignInState(value: unknown): DshAccountSignInState {
+  const record = decodeRecord(value, "DeepSeek account state");
+  const phase = requiredString(record, "phase");
+  if (phase !== "idle" && phase !== "signing-in" && phase !== "signed-in" && phase !== "failed") {
+    throw new Error("Invalid DeepSeek sign-in phase.");
+  }
+  return {
+    phase,
+    account: record.account === null || record.account === undefined ? null : decodeDshAccount(record.account),
+  };
 }

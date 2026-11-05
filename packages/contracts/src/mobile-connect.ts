@@ -56,6 +56,30 @@ export interface MobileConnectedDevice {
   via: "code" | "link";
 }
 
+/**
+ * One pairing the settings tab offers the phone: the `openbot://mobile-connect?...` link that the QR
+ * encodes and the manual entry pastes, beside the parts it is built from. A one-time code expires;
+ * the permanent link does not, and revoking its device is the only way to cut it off.
+ */
+export interface MobileConnectPairing {
+  link: string;
+  apiUrl: string;
+  ticket: string;
+  /** Epoch milliseconds when the ticket stops redeeming, or null for the permanent link. */
+  expiresAt: number | null;
+}
+
+/** What the local mobile-connect service is serving, for the settings tab that shows it. */
+export interface MobileConnectServiceState {
+  /** False when the service was turned off with `DENGERBOT_MOBILE_CONNECT=off`. */
+  enabled: boolean;
+  /** The HTTP origin the phone redeems against, or null when no LAN address was found. */
+  apiUrl: string | null;
+  /** The Signal origin the phone is told to use, or null while the service is off. */
+  signalUrl: string | null;
+  devices: readonly MobileConnectedDevice[];
+}
+
 export interface AccountSession {
   sessionId: string;
   name: string;
@@ -143,6 +167,8 @@ export function isMobileConnectDevelopmentHost(hostname: string): boolean {
   const [first, second] = values;
   return (
     first === 10 ||
+    // Tailscale's CGNAT range, 100.64.0.0/10, so the phone can reach the desktop over Tailscale.
+    (first === 100 && second !== undefined && second >= 64 && second <= 127) ||
     (first === 172 && second !== undefined && second >= 16 && second <= 31) ||
     (first === 192 && second === 168)
   );
