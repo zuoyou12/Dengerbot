@@ -92,3 +92,16 @@ For a build profile, credential or submission option the command needs, see http
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules, so a library with native code needs a development build. Say so and stop there; creating or running that build is an authorized command under "Execution and verification limits".
 - Prefer recommended Expo modules over third-party libraries. Check `.agents/skills/` for a skill that covers the dependency before adding it, and https://docs.expo.dev/versions/latest/index.md for whether Expo already ships the module you need.
+
+## This fork's boundaries
+
+The app is the OpenBot upstream with Dengerbot's brand and pairing changes on top:
+
+- `app.json` is Dengerbot (`run.dengerbot.mobile`); the URL scheme stays `openbot:` because the
+  desktop's pairing links hard-code it.
+- Sign-in: the QR scan is the entry, and `manual-pairing.tsx` (paste a link) is the second one; both
+  redeem through `redeemMobileConnectUrl`. The upstream email entry is hidden, its code paths remain.
+- The upstream invitation / cloud-server / account surfaces are hidden or trimmed; the onboarding
+  offers connecting to a computer only.
+- Support points at `zuoyou12/Dengerbot`; there is no upstream X contact.
+- Pairing and Signal behavior: `ws://<LAN>:8088/v1/signal` — the `/v1/signal` path is required.
