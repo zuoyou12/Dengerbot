@@ -45,6 +45,15 @@ export function normalizeSubscribedProviderError(detail: string): string | null 
  * OpenBot usually acts first and DSH remains the overflow fallback. A small window or a large
  * output reservation can still let DSH compact first; the handoff then reads OpenBot's own history.
  */
+/**
+ * A structured AUTH failure from DSH. Its envelope can carry the signed request URL and the account
+ * token, so only a fixed sentence survives: the code, a strictly validated HTTP status and request
+ * id. The raw detail is not logged and not shown — this branch never calls `log` with it.
+ */
+const DSH_AUTH_FAILURE = /(?:^|[,{}[\s])"code"\s*:\s*"AUTH"|\bLlmFailure\b[^\n]*\bAUTH\b/u;
+const DSH_AUTH_STATUS = /"httpStatus"\s*:\s*(\d{3})/u;
+const DSH_AUTH_REQUEST_ID = /"requestId"\s*:\s*"([A-Za-z0-9._-]{1,64})"/u;
+
 export const DSH_ACP_FLAVOR: AcpFlavor = {
   contextCompaction: "handoff",
   turnFailure(_error, detail, redact, log) {
@@ -52,6 +61,12 @@ export const DSH_ACP_FLAVOR: AcpFlavor = {
     if (normalized) {
       log(detail);
       return redact(normalized);
+    }
+    if (DSH_AUTH_FAILURE.test(detail)) {
+      const status = DSH_AUTH_STATUS.exec(detail)?.[1];
+      const requestId = DSH_AUTH_REQUEST_ID.exec(detail)?.[1];
+      const suffix = `${status ? `, status ${status}` : ""}${requestId ? `, request ${requestId}` : ""}`;
+      return redact(`DeepSeek sign-in failed (AUTH${suffix}). Sign in again from the settings.`);
     }
     return detail;
   },

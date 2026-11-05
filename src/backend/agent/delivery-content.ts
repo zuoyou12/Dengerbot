@@ -8,6 +8,7 @@ import { wokenWaitsPromptText } from "../agent-waits/agent-waits";
 import { homeSkillRoot, homeSkillTagSlug } from "../home-skills";
 import type { DeliveryContext } from "../mailbox-store";
 import { quietRoutineRun, ROUTINE_NO_UPDATE_TOOL, ROUTINE_REPORT_FAILURE_TOOL } from "./routine-quiet-runs";
+import { WRITTEN_TOOL_CALL_CORRECTION } from "./written-tool-call";
 
 export function responseAttachmentMessageId(threadId: string, turnId: string, callId: string): string {
   const digest = createHash("sha256").update(`${threadId}\0${turnId}\0${callId}`).digest("hex").slice(0, 32);
@@ -170,6 +171,11 @@ function escapeRegExp(value: string): string {
 export function deliveryPromptInput(context: DeliveryContext, sources: DeliveryPromptSources): DeliveryInputItem[] {
   const { delivery, managedAttachments } = context;
   const { agentNames, snapshot } = sources;
+  // A written-tool-call correction replays no original request: the next turn carries only the
+  // correction text, so the model cannot read its own unrun tool call as fresh instructions.
+  if (context.resumeAfterUsageLimit?.correction === "written_tool_call") {
+    return [{ type: "text", text: WRITTEN_TOOL_CALL_CORRECTION }];
+  }
   const displayText = displayMessageReferences(delivery.text, delivery.attachments, agentNames);
   let text = sources.executionText ?? (displayText || "The user shared attached local files.");
   if (delivery.sender.kind === "user" && delivery.replyToMessageId) {

@@ -81,6 +81,7 @@ import {
 import { TurnTraces, traceMessage } from "./turn-traces";
 import { collectProviderUsage } from "./usage-collection";
 import { USAGE_LIMIT_METHOD, type UsageLimitGate } from "./usage-limit-gate";
+import { writesToolCall } from "./written-tool-call";
 
 const logger = createOpenBotLogger("turn-lifecycle");
 const ENDED_TURN_LIMIT = 256;
@@ -262,6 +263,8 @@ export class TurnLifecycle {
    * delivery before it ran again, for one run again per key.
    */
   readonly #failoverRetries = new Map<string, Set<string>>();
+  /** Consecutive written-tool-call corrections per thread, deepseek turns only. Capped at two. */
+  readonly #writtenCallCorrections = new Map<string, number>();
   /** The deliveries run again after a refused session history. Each one gets a single retry. */
   readonly #refusedRetries = new Set<string>();
   /** Running turns whose agent called the no-update tool. The completion of the turn takes the entry. */
@@ -895,6 +898,36 @@ export class TurnLifecycle {
         return;
       }
       const channelTurn = !taskTurn && this.#conversation.isExecutionThread(snapshot.threadId);
+      // A deepseek turn that ended normally but wrote its tool call into the text ran nothing. One
+      // correction turn, carrying only the correction text, asks the model to call the tool through
+      // its interface; at most two in a row per thread, and a real tool call, a plain answer or the
+      // thread ending any other way resets the count. The original reply is never rewritten.
+      if (running !== undefined && running.client.provider === "deepseek") {
+        const answer = status === "completed" ? latestTurnAnswer(snapshot.messages, turnId) : undefined;
+        const wroteCall = answer !== undefined && !running.acted && writesToolCall(answer.text);
+        const corrections = this.#writtenCallCorrections.get(threadId) ?? 0;
+        if (status !== "completed" || running.acted || (answer !== undefined && !wroteCall)) {
+          this.#writtenCallCorrections.delete(threadId);
+        } else if (
+          wroteCall &&
+          answer !== undefined &&
+          deliveries.length > 0 &&
+          !taskTurn &&
+          !channelTurn &&
+          !routineSession &&
+          corrections < 2
+        ) {
+          this.#writtenCallCorrections.set(threadId, corrections + 1);
+          yield* this.#requeueTurn(agentId, threadId, turnId, snapshot, deliveries, {
+            turnId,
+            previousTurnIds: [turnId],
+            workSteps: "",
+            correction: "written_tool_call",
+          });
+          this.#hooks.scheduleDrain(agentId);
+          return;
+        }
+      }
       // After work started, only a ready automatic backup continues it. A turn refused before
       // work still waits for the reset when no backup is ready. A continuation that a backup refused
       // before work keeps the earlier provider's work.

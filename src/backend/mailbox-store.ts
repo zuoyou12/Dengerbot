@@ -119,6 +119,11 @@ export interface UsageLimitContinuation {
   turnId: string;
   workSteps: string;
   previousTurnIds: string[];
+  /**
+   * Set when the continuation carries only the written-tool-call correction, not the original
+   * request: the delivery then replays no message, no attachments and no work steps.
+   */
+  correction?: "written_tool_call";
 }
 
 interface StoredDelivery {
