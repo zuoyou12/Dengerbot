@@ -6,7 +6,6 @@ import Calendar from "lucide-react-native/icons/calendar";
 import ChartColumn from "lucide-react-native/icons/chart-column";
 import Check from "lucide-react-native/icons/check";
 import ChevronDown from "lucide-react-native/icons/chevron-down";
-import Plus from "lucide-react-native/icons/plus";
 import Settings from "lucide-react-native/icons/settings";
 import Settings2 from "lucide-react-native/icons/settings-2";
 import ShoppingBag from "lucide-react-native/icons/shopping-bag";
@@ -42,7 +41,7 @@ import { type MenuAction, type MenuComponentRef, MenuView } from "@/shared/compo
 import { ProfileAvatar } from "@/shared/components/profile-avatar";
 import { devFeatureOverride } from "@/shared/lib/dev-feature-overrides";
 import { haptics } from "@/shared/lib/haptics";
-import { refreshMobileFeatures, useMobileFeature } from "@/shared/lib/mobile-features";
+import { refreshMobileFeatures } from "@/shared/lib/mobile-features";
 import { useReducedMotion } from "@/shared/lib/motion";
 import { isAndroid, longPressDelay } from "@/shared/lib/platform";
 import { currentText, useText } from "@/shared/lib/text";
@@ -228,9 +227,6 @@ export const ServerDrawerContent = memo(function ServerDrawerContent({
 
   // The plus button opens the plans and the account's hosted servers when the account can have
   // hosted servers and the feature flag of this build is on. A development build can override both.
-  const accountHasPlans = useHostedServerAvailability((state) => state.userId === session.user.id && state.available);
-  const cloudServersOn = useMobileFeature(session.apiUrl, "cloudServers");
-  const showsPlans = devFeatureOverride("cloudServers") ?? (accountHasPlans && cloudServersOn);
   useEffect(() => {
     if (!open) return;
     void refreshHostedServerAvailability(session.user.id, hostedServerCalls(session));
@@ -426,21 +422,7 @@ export const ServerDrawerContent = memo(function ServerDrawerContent({
               >
                 <Check color={mutedColor} size={18} strokeWidth={2} />
               </ServerDrawerIconButton>
-            ) : (
-              <ServerDrawerIconButton
-                accessibilityLabel={showsPlans ? t("mobile.server.drawer.add") : t("mobile.server.drawer.join")}
-                color={mutedColor}
-                fallbackVariant="filled"
-                systemName="plus"
-                onPress={() =>
-                  onNavigate(
-                    showsPlans ? { pathname: "/hosted-server", params: { entryPoint: "drawer" } } : "/add-server",
-                  )
-                }
-              >
-                <Plus color={mutedColor} size={18} strokeWidth={2} />
-              </ServerDrawerIconButton>
-            )}
+            ) : null}
           </View>
         </View>
 
