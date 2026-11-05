@@ -57,6 +57,32 @@ const HTTP_PORT_ATTEMPTS = 8;
 // without the `/v1/signal` path closes with 1006, which cost a day to find once already.
 const SIGNAL_PORT = 8088;
 const SIGNAL_PATH = "/v1/signal";
+
+/**
+ * The Signal origin the paired phones and the host's peer window use right now: the override, or
+ * the first private LAN address on the compose port. The content security policy reads this per
+ * main-frame response, so a network change takes effect without a restart.
+ */
+export function mobileConnectSignalOrigin(): string | null {
+  const override = process.env.DENGERBOT_SIGNAL_ORIGIN?.trim();
+  if (override) return override.replace(/\/+$/u, "");
+  for (const interfaces of Object.values(networkInterfaces())) {
+    for (const entry of interfaces ?? []) {
+      if (entry.internal || entry.family !== "IPv4") continue;
+      const octets = entry.address.split(".").map(Number);
+      if (octets.length !== 4) continue;
+      const [first, second] = octets;
+      const privateRange =
+        first === 10 ||
+        (first === 100 && second !== undefined && second >= 64 && second <= 127) ||
+        (first === 172 && second !== undefined && second >= 16 && second <= 31) ||
+        (first === 192 && second === 168);
+      if (privateRange) return `ws://${entry.address}:${SIGNAL_PORT}`;
+    }
+  }
+  return null;
+}
+
 const STATE_FILE = "mobile-connect-service-state.json";
 const JWKS_FILE = "signal-ticket-jwks.json";
 const DSH_HANDOFF_FILE = "dengerbot-account.json";
@@ -667,6 +693,7 @@ export class MobileConnectService {
     }
     if (method === "POST" && path === "/v1/mobile-auth/redeem") return void this.#redeem(response, body);
     if (path === "/v1/me" && method === "GET") return void this.#me(request, response);
+    if (path === "/v1/signal-jwks.json" && method === "GET") return void this.#signalJwks(response);
     if (path.startsWith("/v2/remote/")) return void this.#remote(request, response, method, path, body);
     this.#respond(response, 404, { error: { code: "not_found", message: "Unknown route." } });
   }
@@ -762,6 +789,21 @@ export class MobileConnectService {
   #me(request: IncomingMessage, response: ServerResponse): void {
     this.#requireBearer(request);
     this.#respond(response, 200, this.#userPayload());
+  }
+
+  /**
+   * The public signing keys, for the LAN Signal container: its `REMOTE_TICKET_JWKS_URL` points
+   * here. Public keys only — the state file beside this route is where the private half lives.
+   */
+  #signalJwks(response: ServerResponse): void {
+    if (!this.#state || !this.#privateKey) throw new HttpError(503, "not_ready", "The service is not started.");
+    const jwk = createPublicKey(this.#privateKey).export({ format: "jwk" });
+    if (jwk.kty !== "EC" || typeof jwk.crv !== "string" || typeof jwk.x !== "string" || typeof jwk.y !== "string") {
+      throw new HttpError(500, "bad_key", "The signing key is not an EC key.");
+    }
+    this.#respond(response, 200, {
+      keys: [{ kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y, kid: this.#state.kid, alg: "ES256", use: "sig" }],
+    });
   }
 
   #remote(request: IncomingMessage, response: ServerResponse, method: string, path: string, body: DynamicRecord): void {

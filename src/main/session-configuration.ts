@@ -23,23 +23,26 @@ import { attachmentCorsHeaders, attachmentDocumentHeaders, chatVisualResponse } 
 import { buildContentSecurityPolicy, readRemoteSignalOrigin } from "./content-security-policy";
 import { filePreviewPages } from "./file-preview-pages";
 import { fileResponse } from "./file-response";
+import { mobileConnectSignalOrigin } from "./mobile-connect-service";
 import type { RemoteServerManager } from "./remote-server-manager";
 import { canCheckRendererPermission, canRequestRendererPermission } from "./renderer-permissions";
 import type { TeamStore } from "./team-store";
 import { isTrustedRendererUrl } from "./trusted-renderer";
 
 export function configureContentSecurityPolicy(): void {
-  const policy = buildContentSecurityPolicy(
-    app.isPackaged,
-    process.env.REMOTE_SIGNAL_URL,
-    readRemoteSignalOrigin(process.env.OPENBOT_REMOTE_SIGNAL_URL),
-  );
-
+  // The policy is rebuilt per main-frame response: the mobile-connect Signal origin follows the
+  // network this computer is on, and a static startup value would go stale on the next Wi-Fi.
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     if (details.resourceType !== "mainFrame" || !isTrustedRendererUrl(details.url)) {
       callback(details.responseHeaders === undefined ? {} : { responseHeaders: details.responseHeaders });
       return;
     }
+    const policy = buildContentSecurityPolicy(
+      app.isPackaged,
+      process.env.REMOTE_SIGNAL_URL,
+      readRemoteSignalOrigin(process.env.OPENBOT_REMOTE_SIGNAL_URL),
+      mobileConnectSignalOrigin(),
+    );
     callback({
       responseHeaders: {
         ...details.responseHeaders,

@@ -26,6 +26,7 @@ import {
   resolveDshCli,
 } from "./cli";
 import type { CustomProviderConfig, CustomProviderSource } from "./custom-provider-types";
+import { DSH_ACCOUNT_BRIDGE_PATCH_ENTRY, installDshAccountBridge } from "./dsh-account-bridge";
 import type { McpOAuthAuthority } from "./mcp-oauth-provider";
 import type { McpOAuthProxySettingsStore } from "./mcp-oauth-proxy";
 import type { McpDropReporter, McpEndpointSource, McpServerSource, McpToolRuntimeSource } from "./mcp-provider-shapes";
@@ -326,11 +327,15 @@ export function configureDshCustomProviders(
   if (home) {
     const profileDir = join(home, "profiles", "acp");
     mkdirSync(profileDir, { recursive: true, mode: 0o700 });
+    // The account bridge runs in every profile the harness starts, so the phone sees the account
+    // as soon as an assistant uses DeepSeek.
+    installDshAccountBridge(home, "acp");
     const patch = [
       DSH_COMPACTION_PATCH,
       ...(Object.keys(providerProfiles).length > 0
         ? [{ id: "llm-pi-ai", config: { providers: providerProfiles } }]
         : []),
+      DSH_ACCOUNT_BRIDGE_PATCH_ENTRY,
     ];
     writeFileSync(join(profileDir, "cordis.patch.yml"), `${JSON.stringify(patch, null, 2)}\n`, {
       encoding: "utf8",

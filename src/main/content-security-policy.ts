@@ -4,8 +4,12 @@ export function buildContentSecurityPolicy(
   packaged: boolean,
   developmentSignalUrl?: string,
   remoteSignalOrigin?: string | null,
+  mobileSignalOrigin?: string | null,
 ): string {
   const remoteSignalSource = remoteSignalOrigin ? ` ${remoteSignalOrigin}` : "";
+  // The paired phones' Signal: a private ws origin the desktop itself derives, so the peer window
+  // may open it even when no remote signal is configured.
+  const mobileSignalSource = mobileSignalOrigin ? ` ${mobileSignalOrigin}` : "";
   const developmentSources = packaged
     ? ""
     : ` http://localhost:* ws://localhost:*${developmentSignalSource(developmentSignalUrl)}`;
@@ -22,7 +26,7 @@ export function buildContentSecurityPolicy(
     "media-src 'self' blob: openbot-attachment: openbot-remote-attachment:",
     // The avatar picker fetches a stored avatar by bytes to match it against the presets,
     // so the avatar schemes need the same fetch access that `img-src` gives them.
-    `connect-src 'self' openbot-attachment: openbot-remote-attachment: openbot-avatar: openbot-remote-avatar: https://analytics.openbot.run ws://127.0.0.1:* wss://*.openbot.run${remoteSignalSource}${developmentSources}`,
+    `connect-src 'self' openbot-attachment: openbot-remote-attachment: openbot-avatar: openbot-remote-avatar: https://analytics.openbot.run ws://127.0.0.1:* wss://*.openbot.run${remoteSignalSource}${mobileSignalSource}${developmentSources}`,
     "object-src 'none'",
     // The remote desktop viewer uses a loopback proxy in packaged apps too.
     "frame-src 'self' openbot-attachment: openbot-remote-attachment: openbot-visual: openbot-remote-visual: https://*.openbot.run http://127.0.0.1:* http://localhost:*",

@@ -12,6 +12,7 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 import type { DshAccountSignInPhase } from "@openbot/contracts/dsh-account";
+import { installDshAccountBridge } from "../backend/dsh-account-bridge";
 
 export interface DshSignInServiceOptions {
   /**
@@ -53,6 +54,10 @@ export class DshSignInService {
       return;
     }
     this.#setPhase("signing-in");
+    // The web profile gets the bridge too: the sign-in window itself reads no account, but the
+    // plugin inside it rewrites the handoff the moment the OAuth flow lands, and that is what
+    // closes this window again.
+    installDshAccountBridge(this.#options.dshHome, "web");
     // stdio "ignore" is the whole point: the sign-in URL carries tokens and never enters a log.
     const child = spawn(command.executable, [command.entry, "--profile", "web"], {
       env: { ...process.env, DSH_HOME: this.#options.dshHome },
