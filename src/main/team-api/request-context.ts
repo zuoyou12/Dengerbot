@@ -34,6 +34,11 @@ export interface TeamApiRequestContext {
   readonly token: string;
   readonly sessionId: string;
   readonly sessionExpiresAt: string;
+  /**
+   * True for a request a verified paired phone forwarded with the `paired-deepseek-v1` capability
+   * announced: the DeepSeek assistant is visible to it, and its model ids travel as provider/name.
+   */
+  readonly pairedDeepSeek: boolean;
   /** What the roles let the member do with one agent. Owners and admins always get `manage`. */
   readonly agentLevel: (agentId: string) => AgentAccessLevel;
   readonly json: (status: number, value: object | null) => RouteOutcome;

@@ -86,6 +86,7 @@ async function send(method: string, path: string, dependencies: TeamRouteDepende
     agentLevel: () => "manage",
     sessionId: "session-a",
     sessionExpiresAt: "2026-10-18T00:00:00.000Z",
+    pairedDeepSeek: false,
     json: (status) => {
       statuses.push(status);
       return "handled";

@@ -137,7 +137,7 @@ export async function routeWorkflows(
     agentIds.every((agentId) => !hiddenAgentIds.has(agentId) && (admin || known.has(agentId)));
   const visibleGraph = (graph: WorkflowGraph, known: ReadonlySet<string>) =>
     visibleAgents(graphAgentIds(graph), known) &&
-    graph.nodes.every((node) => !isPeerHiddenProvider(node.fields.provider, protocol));
+    graph.nodes.every((node) => !isPeerHiddenProvider(node.fields.provider, protocol, context.pairedDeepSeek));
   /** A graph that the member can read and use at `level`, or a 404 as for a missing workflow. */
   const requireUsable = (graph: WorkflowGraph, level: Exclude<AgentAccessLevel, "none">) => {
     if (!visibleGraph(graph, listed())) workflowMissing();

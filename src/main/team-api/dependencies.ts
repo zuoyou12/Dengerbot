@@ -459,6 +459,11 @@ export interface TeamApiOptions {
   store: TeamStore;
   agents: TeamApiAgents;
   /**
+   * Whether a WebRTC session id names a live paired mobile session of this computer. The paired
+   * DeepSeek visibility asks it per request; absent, no peer is paired and nothing changes.
+   */
+  isPairedMobileSession?: ((sessionId: string) => boolean) | undefined;
+  /**
    * Waits for the agent initialization in progress. A host that wakes publishes before its agents
    * load, and an empty roster then would tell a peer that the server has no agents.
    */

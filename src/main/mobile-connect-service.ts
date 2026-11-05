@@ -454,8 +454,17 @@ export class MobileConnectService {
   /** True when the bearer belongs to a live paired mobile session. The Team API checks this. */
   isPairedOwnerSession(token: string | null | undefined): boolean {
     if (!token) return false;
-    const session = this.#sessionByToken(token);
-    return session !== null;
+    return this.#sessionByToken(token) !== null;
+  }
+
+  /**
+   * True when the session id names a live paired mobile session. A forwarded Team API request
+   * carries the host's own token, so the pairing is checked by the WebRTC session id instead.
+   */
+  hasPairedSession(sessionId: string): boolean {
+    const state = this.#state;
+    if (!state) return false;
+    return state.sessions.some((session) => session.sessionId === sessionId && session.expiresAt > Date.now());
   }
 
   /** The synthetic local account, with the bridge's name and avatar when it has one. */

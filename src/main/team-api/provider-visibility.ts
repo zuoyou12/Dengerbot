@@ -1,5 +1,6 @@
 import { isAgentProvider, isKeyOnlyProvider } from "@openbot/contracts/agent-providers";
 import type { AgentSummary } from "@openbot/contracts/ipc";
+import { TEAM_PAIRED_DEEPSEEK_CAPABILITY } from "@openbot/contracts/team-protocol/current";
 import type { TeamProtocolV1JsonObject, TeamProtocolV1JsonValue } from "@openbot/contracts/team-protocol/v1";
 
 /**
@@ -27,13 +28,53 @@ const FROZEN_PROVIDERS: ReadonlyMap<number, readonly string[]> = (() => {
 /**
  * Tells if a peer on this protocol must not see the provider: a key-only provider, or a provider of
  * this host that the protocol's frozen list does not have. Protocol 8 and later see every other
- * provider.
+ * provider. A paired phone that the host verified and that advertised `paired-deepseek-v1` sees the
+ * DeepSeek provider — and only that one of the key-only providers — on protocol 8.
  */
-export function isPeerHiddenProvider(value: unknown, protocol: number): boolean {
+export function isPeerHiddenProvider(value: unknown, protocol: number, pairedDeepSeek = false): boolean {
   // A key-only provider, such as Inception, DeepSeek or OpenRouter, runs in the host's Pi CLI with the host's own key.
-  if (isAgentProvider(value) && isKeyOnlyProvider(value)) return true;
+  if (isAgentProvider(value) && isKeyOnlyProvider(value)) {
+    return !(pairedDeepSeek && protocol >= 8 && value === "deepseek");
+  }
   const known = FROZEN_PROVIDERS.get(Math.max(1, Math.min(protocol, 8)));
   return known !== undefined && isAgentProvider(value) && !known.includes(value);
+}
+
+/**
+ * Whether one peer may see the DeepSeek assistant at all: the host verified its paired session, it
+ * negotiated protocol 8, and it advertised the `paired-deepseek-v1` capability. Every one of the
+ * three is required — the default for a plain remote client stays "invisible".
+ */
+export function pairedDeepSeekVisible(
+  protocol: number,
+  capabilities: ReadonlySet<string>,
+  pairedSession: boolean,
+): boolean {
+  return pairedSession && protocol >= 8 && capabilities.has(TEAM_PAIRED_DEEPSEEK_CAPABILITY);
+}
+
+/**
+ * DSH names its models with a JSON tuple (`["xiaomi","mimo-v2.6-flash"]`), and a frozen protocol
+ * model field accepts no quotes. The phone sees `xiaomi/mimo-v2.6-flash` instead; a value that is
+ * not a two-string tuple passes through untouched.
+ */
+export function peerDeepSeekModelId(model: string): string {
+  try {
+    const parsed = JSON.parse(model);
+    if (Array.isArray(parsed) && parsed.length === 2 && parsed.every((part) => typeof part === "string")) {
+      return `${parsed[0]}/${parsed[1]}`;
+    }
+  } catch {
+    // A plain model id: the phone sees it as it is.
+  }
+  return model;
+}
+
+/** The inverse of {@link peerDeepSeekModelId}: the phone's `provider/model` becomes the tuple again. */
+export function restorePeerDeepSeekModelId(model: string): string {
+  const separator = model.indexOf("/");
+  if (separator <= 0 || separator === model.length - 1) return model;
+  return JSON.stringify([model.slice(0, separator), model.slice(separator + 1)]);
 }
 
 /**
@@ -49,8 +90,14 @@ function isPeerHiddenId(value: TeamProtocolV1JsonObject, protocol: number, listK
 }
 
 /** A protocol view never changes the host's stored agents or provider sessions. */
-export function hiddenProviderAgentIds(agents: readonly AgentSummary[], protocol: number): Set<string> {
-  return new Set(agents.filter((agent) => isPeerHiddenProvider(agent.provider, protocol)).map((agent) => agent.id));
+export function hiddenProviderAgentIds(
+  agents: readonly AgentSummary[],
+  protocol: number,
+  pairedDeepSeek = false,
+): Set<string> {
+  return new Set(
+    agents.filter((agent) => isPeerHiddenProvider(agent.provider, protocol, pairedDeepSeek)).map((agent) => agent.id),
+  );
 }
 
 export function legacyProviderView(value: unknown, hiddenIds: ReadonlySet<string>): TeamProtocolV1JsonValue {

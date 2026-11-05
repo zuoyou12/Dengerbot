@@ -7,7 +7,12 @@ import {
   parseHostAnalyticsInput,
   parseSaveAgentProfile,
 } from "@openbot/contracts/ipc";
-import { hiddenProviderAgentIds, isPeerHiddenProvider } from "./provider-visibility";
+import {
+  hiddenProviderAgentIds,
+  isPeerHiddenProvider,
+  peerDeepSeekModelId,
+  restorePeerDeepSeekModelId,
+} from "./provider-visibility";
 // Agents: the collection, the sidebar that arranges them, and everything under one agent's id.
 //
 // The order in this file is the one thing about it that is not free. The static collection paths -
@@ -23,7 +28,12 @@ import { hiddenProviderAgentIds, isPeerHiddenProvider } from "./provider-visibil
 import { readFile } from "node:fs/promises";
 import { isAvatarMimeType } from "@openbot/contracts/avatar-images";
 import { AVATAR_IMAGE_LIMITS, INPUT_LIMITS } from "@openbot/contracts/input-limits";
-import { type CreateAgentInput, type DuplicateAgentResult, WORKFLOWS_USAGE_ID } from "@openbot/contracts/ipc";
+import {
+  type AgentSummary,
+  type CreateAgentInput,
+  type DuplicateAgentResult,
+  WORKFLOWS_USAGE_ID,
+} from "@openbot/contracts/ipc";
 import { TEAM_API_ROUTES } from "@openbot/contracts/team-api-routes";
 import { V5_AGENT_MODEL } from "@openbot/contracts/team-protocol/v5-adapter";
 import { V6_AGENT_MODEL } from "@openbot/contracts/team-protocol/v6-adapter";
@@ -72,7 +82,15 @@ export async function routeAgents(
   { agents, skills, sidebarLayout, duplicateAgent }: AgentRouteDependencies,
 ): Promise<RouteOutcome> {
   const { method, url, request, response, member, capabilities, json, empty } = context;
-  const hidden = hiddenProviderAgentIds(agents.listAgents(), context.protocol);
+  const hidden = hiddenProviderAgentIds(agents.listAgents(), context.protocol, context.pairedDeepSeek);
+  // A paired phone sees the DeepSeek assistant, and its model ids travel as provider/name: the
+  // outgoing list and the create/update inputs convert both ways (see `peerDeepSeekModelId`).
+  const peerAgents = (list: readonly AgentSummary[]): AgentSummary[] =>
+    context.pairedDeepSeek
+      ? list.map((agent) =>
+          agent.provider === "deepseek" ? { ...agent, model: peerDeepSeekModelId(agent.model) } : agent,
+        )
+      : [...list];
   /**
    * A peer cannot start an agent on a provider that its protocol does not show: the agent would be
    * hidden from the peer that made it. A named model decides the provider too; with neither named,
@@ -80,11 +98,13 @@ export async function routeAgents(
    */
   function requireVisibleProvider(input: Pick<CreateAgentInput, "provider" | "model"> = {}): void {
     if (input.provider !== undefined) {
-      if (isPeerHiddenProvider(input.provider, context.protocol)) throw new HttpError(400, "provider is invalid.");
+      if (isPeerHiddenProvider(input.provider, context.protocol, context.pairedDeepSeek)) {
+        throw new HttpError(400, "provider is invalid.");
+      }
       return;
     }
     const provider = agents.newAgentProvider(input);
-    if (provider && isPeerHiddenProvider(provider, context.protocol)) {
+    if (provider && isPeerHiddenProvider(provider, context.protocol, context.pairedDeepSeek)) {
       throw new HttpError(400, sourceText("error.team.newAgentProviderLocalOnly"));
     }
   }
@@ -182,23 +202,37 @@ export async function routeAgents(
   }
   if (method === "GET" && url.pathname === TEAM_API_ROUTES.agents.models) {
     // Only ids the peer's protocol accepts: its model list decoder fails closed on the whole array, and
-    // `isAgentModel` also accepts `=` and `,`, which only protocol 6 knows.
+    // `isAgentModel` also accepts `=` and `,`, which only protocol 6 knows. A paired phone also sees
+    // the DeepSeek models, whose tuple ids travel as provider/name.
     const modelId = context.protocol < 6 ? V5_AGENT_MODEL : V6_AGENT_MODEL;
+    const models = await agents.listModels();
     return json(
       200,
-      (await agents.listModels()).filter((model) => modelId.test(model.id)),
+      context.pairedDeepSeek
+        ? [
+            ...models
+              .filter((model) => model.provider === "deepseek")
+              .map((model) => ({ ...model, id: peerDeepSeekModelId(model.id) })),
+            ...models.filter((model) => model.provider !== "deepseek" && modelId.test(model.id)),
+          ]
+        : models.filter((model) => modelId.test(model.id)),
     );
   }
   if (method === "GET" && url.pathname === TEAM_API_ROUTES.agents.all) {
-    return json(200, agents.listAgents());
+    return json(200, peerAgents(agents.listAgents()));
   }
   if (method === "GET" && url.pathname === TEAM_API_ROUTES.agents.conversationReads) {
     return json(200, agents.listConversationReads(member.id, markerExclusionsForCapabilities(capabilities)));
   }
   if (method === "POST" && url.pathname === TEAM_API_ROUTES.agents.all) {
     const input = agentCreate(await readJson(request));
-    requireVisibleProvider(input);
-    return json(201, await runCauseEffect(agents.createAgent(input, undefined, undefined, memberSender(member))));
+    // The phone sends `provider/name`; the host stores the JSON tuple the DSH harness knows.
+    const restored =
+      context.pairedDeepSeek && input.provider === "deepseek" && typeof input.model === "string"
+        ? { ...input, model: restorePeerDeepSeekModelId(input.model) }
+        : input;
+    requireVisibleProvider(restored);
+    return json(201, await runCauseEffect(agents.createAgent(restored, undefined, undefined, memberSender(member))));
   }
 
   const agentMatch = url.pathname.match(/^\/v1\/agents\/([^/]+)(?:\/(.*))?$/);
@@ -230,8 +264,13 @@ export async function routeAgents(
     if (method === "PATCH" && !action) {
       const input = agentUpdate(await readJson(request), agentId);
       if (input.provider !== undefined) requireVisibleProvider({ provider: input.provider });
+      // The phone updates a DeepSeek agent's model as `provider/name`; store the tuple again.
+      const restored =
+        context.pairedDeepSeek && input.provider === "deepseek" && typeof input.model === "string"
+          ? { ...input, model: restorePeerDeepSeekModelId(input.model) }
+          : input;
       // The released protocol has no `pendingRuntime`, so a provider change during work is refused.
-      return json(200, await runCauseEffect(agents.updateAgent(input, undefined, false)));
+      return json(200, await runCauseEffect(agents.updateAgent(restored, undefined, false)));
     }
     if (method === "POST" && action === "duplicate") {
       const body = await readJson(request);

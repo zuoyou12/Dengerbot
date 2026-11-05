@@ -151,6 +151,7 @@ import {
   hiddenProviderAgentIds,
   isPeerHiddenProvider,
   legacyProviderView,
+  pairedDeepSeekVisible,
 } from "./team-api/provider-visibility";
 import type { RouteOutcome, TeamApiRequestContext } from "./team-api/request-context";
 import {
@@ -565,7 +566,13 @@ export class TeamApiServer {
       logoVersion: identity.logoVersion,
     };
     for (const [client, connection] of this.#eventClients) {
-      const payload = this.#encodeProviderEvent(event, connection.capabilities);
+      const payload = this.#encodeProviderEvent(
+        event,
+        connection.capabilities,
+        {},
+        new Set(),
+        this.#connectionPairedDeepSeek(connection),
+      );
       if (payload && client.readyState === webSockets.WebSocket.OPEN) client.send(payload);
     }
   }
@@ -793,7 +800,12 @@ export class TeamApiServer {
         await runCauseEffect(this.#options.agentsReady());
       }
       // A member also gets the agents that the roles close to them as hidden.
-      const hidden = this.hiddenAgentIds(context.protocol, context.capabilities, context.member);
+      const hidden = this.hiddenAgentIds(
+        context.protocol,
+        context.capabilities,
+        context.member,
+        context.pairedDeepSeek,
+      );
       // Every protocol gets the projection, also with no hidden agent: a provider status row, a
       // model or an auth state of a local-only provider can be in the response.
       const responseRoute = this.#responseRoutes.get(response);
@@ -890,7 +902,7 @@ export class TeamApiServer {
       if (
         // The ID, not the member: the registration outlives a role change.
         (await routeLiveActivityPush(context, this.#options.liveActivityPush, () =>
-          this.hiddenAgentIds(context.protocol, context.capabilities, context.member.id),
+          this.hiddenAgentIds(context.protocol, context.capabilities, context.member.id, context.pairedDeepSeek),
         )) === "handled"
       )
         return;
@@ -1044,9 +1056,10 @@ export class TeamApiServer {
     capabilities: ReadonlySet<string>,
     options: { preserveSemanticTags?: boolean } = {},
     blocked: ReadonlySet<string> = new Set(),
+    pairedDeepSeek = false,
   ): string | null {
     const protocol = eventProtocol(capabilities);
-    const hidden = hiddenProviderAgentIds(this.#options.agents.listAgents(), protocol);
+    const hidden = hiddenProviderAgentIds(this.#options.agents.listAgents(), protocol, pairedDeepSeek);
     for (const id of blocked) hidden.add(id);
     const visible = protocol === 1 ? legacyProviderView(event, hidden) : hiddenAgentView(event, hidden, protocol);
     if (!isAgentEvent(visible) && !isTeamRealtimeEvent(visible)) return null;
@@ -1205,7 +1218,13 @@ export class TeamApiServer {
       // out of the loop, it would stop the event for every client after this one.
       const encodeEvent = (event: AgentEvent, options = {}) => {
         try {
-          return this.#encodeProviderEvent(event, connection.capabilities, options, blocked);
+          return this.#encodeProviderEvent(
+            event,
+            connection.capabilities,
+            options,
+            blocked,
+            this.#connectionPairedDeepSeek(connection),
+          );
         } catch (error) {
           (this.#options.logger ?? logger).warn("Team API event could not be encoded:", toLogValue(error));
           return null;
@@ -1243,12 +1262,13 @@ export class TeamApiServer {
         // A task event uses the hidden agents of the task routes, so a task of an agent that answers 404 does not arrive.
         const agentId = optionalEventAgentId(optional);
         const protocol = eventProtocol(connection.capabilities);
+        const pairedDeepSeek = this.#connectionPairedDeepSeek(connection);
         if (
           agentId !== null &&
           (blocked.has(agentId) ||
             (requiredCapability === AGENT_TASKS_CAPABILITY
-              ? this.hiddenAgentIds(protocol, connection.capabilities)
-              : hiddenProviderAgentIds(this.#options.agents.listAgents(), protocol)
+              ? this.hiddenAgentIds(protocol, connection.capabilities, undefined, pairedDeepSeek)
+              : hiddenProviderAgentIds(this.#options.agents.listAgents(), protocol, pairedDeepSeek)
             ).has(agentId))
         )
           continue;
@@ -1259,7 +1279,12 @@ export class TeamApiServer {
                 type: optional.type,
                 ...visibleSnapshot(
                   optional,
-                  this.hiddenAgentIds(eventProtocol(connection.capabilities), connection.capabilities, member),
+                  this.hiddenAgentIds(
+                    eventProtocol(connection.capabilities),
+                    connection.capabilities,
+                    member,
+                    this.#connectionPairedDeepSeek(connection),
+                  ),
                 ),
               }
             : optional,
@@ -1525,6 +1550,7 @@ export class TeamApiServer {
         connection.capabilities,
         {},
         this.#blockedAgentIds(this.#connectionMember(connection)),
+        this.#connectionPairedDeepSeek(connection),
       );
       if (!payload) throw new Error("Runtime snapshot is not supported by Team protocol v1.");
       if (Buffer.byteLength(payload) > AGENT_RUNTIME_SNAPSHOT_BYTES_LIMIT) {
@@ -1610,6 +1636,7 @@ export class TeamApiServer {
         connection.capabilities,
         {},
         this.#blockedAgentIds(this.#connectionMember(connection)),
+        this.#connectionPairedDeepSeek(connection),
       );
       if (payload && client.readyState === webSockets.WebSocket.OPEN) client.send(payload);
     }
@@ -1783,9 +1810,14 @@ export class TeamApiServer {
    * The agents this client cannot see: a provider its protocol does not know, or one it cannot describe.
    * With a member, also the agents that the roles close to that member.
    */
-  hiddenAgentIds(protocol: number, capabilities: ReadonlySet<string>, member?: AccessMember | string): Set<string> {
+  hiddenAgentIds(
+    protocol: number,
+    capabilities: ReadonlySet<string>,
+    member?: AccessMember | string,
+    pairedDeepSeek = false,
+  ): Set<string> {
     const agents = this.#options.agents.listAgents();
-    const hidden = hiddenProviderAgentIds(agents, protocol);
+    const hidden = hiddenProviderAgentIds(agents, protocol, pairedDeepSeek);
     for (const id of this.#unrepresentableAgentIds(
       agents.filter((agent) => !hidden.has(agent.id)),
       protocol,
@@ -1991,6 +2023,33 @@ export class TeamApiServer {
 
   // The context is assembled here rather than in `request-context.ts` because `json` and `empty`
   // have to close over the per-response route record, which only this class holds.
+  /**
+   * Whether this request may see the DeepSeek assistant: a forwarded paired phone's request, on
+   * protocol 8, with the capability announced, whose WebRTC session id is a live paired session.
+   * The session id doubles as the mobile session id, so the pairing registry answers by it.
+   */
+  #pairedDeepSeek(request: IncomingMessage): boolean {
+    const session = request.headers["x-openbot-webrtc-session"];
+    if (typeof session !== "string") return false;
+    return pairedDeepSeekVisible(
+      requestProtocol(request),
+      requestCapabilities(request),
+      this.#options.isPairedMobileSession?.(session) ?? false,
+    );
+  }
+
+  /** The same test for an event connection, whose session id the connection state keeps. */
+  #connectionPairedDeepSeek(connection: EventClientState): boolean {
+    return (
+      connection.sessionId !== null &&
+      pairedDeepSeekVisible(
+        eventProtocol(connection.capabilities),
+        connection.capabilities,
+        this.#options.isPairedMobileSession?.(connection.sessionId) ?? false,
+      )
+    );
+  }
+
   #requestContext(
     request: IncomingMessage,
     response: ServerResponse,
@@ -2009,6 +2068,7 @@ export class TeamApiServer {
       token,
       sessionId: authenticated.sessionId,
       sessionExpiresAt: authenticated.sessionExpiresAt,
+      pairedDeepSeek: this.#pairedDeepSeek(request),
       agentLevel: (agentId) => this.agentLevel(authenticated.member, agentId),
       json: (status, value) => this.#json(response, status, value),
       empty: (status) => this.#empty(response, status),
