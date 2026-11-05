@@ -25,6 +25,7 @@ import { createProfileActivityStore } from "./profile-activity-store";
 import { createSettingsAgentsSection } from "./SettingsAgentsSection";
 import { SettingsDynamicIslandTab } from "./SettingsDynamicIslandTab";
 import { SettingsGeneralTab } from "./SettingsGeneralTab";
+import { SettingsMobileConnectTab } from "./SettingsMobileConnectTab";
 import { SettingsNotificationsTab } from "./SettingsNotificationsTab";
 import { SettingsVoiceTab } from "./SettingsVoiceTab";
 import { dynamicIslandSettingsShown, navItem, navItems, type SettingsTab, settingsTabShown } from "./settings-tabs";
@@ -275,6 +276,10 @@ export function SettingsModal(props: SettingsModalProps) {
 
         <Tabs.Content value="computer-use" class="settings-modal-tab-panel" data-tab="computer-use">
           <ComputerUseSetup variant="settings" />
+        </Tabs.Content>
+
+        <Tabs.Content value="mobile-connect" class="settings-modal-tab-panel" data-tab="mobile-connect">
+          <SettingsMobileConnectTab open={props.open} active={() => activeTab() === "mobile-connect"} />
         </Tabs.Content>
 
         <Tabs.Content value="updates" class="settings-modal-tab-panel" data-tab="updates">

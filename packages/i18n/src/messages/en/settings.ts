@@ -615,4 +615,14 @@ export const messages = defineMessages("settings", {
   "settings.transfer.result.signInButton": "Sign in to {provider}",
   "settings.transfer.result.notImported": "Not imported",
   "settings.transfer.result.warnings": "Check these",
+  // The DeepSeek account row the fork adds to the Mobile Connect tab.
+  "settings.dshAccount.title": "DeepSeek account",
+  "settings.dshAccount.description": "The account the DeepSeek Harness uses on this computer.",
+  "settings.dshAccount.signedOut": "Not signed in.",
+  "settings.dshAccount.signedInAs": "Signed in as {name}.",
+  "settings.dshAccount.signingIn": "Waiting for the sign-in window…",
+  "settings.dshAccount.failed": "The sign-in window closed without an account. Try again.",
+  "settings.dshAccount.signIn": "Sign in",
+  "settings.dshAccount.cancel": "Cancel",
+  "settings.dshAccount.balance": "Balance: {balance}",
 });

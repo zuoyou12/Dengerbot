@@ -38,8 +38,8 @@ import { join } from "node:path";
 import type { DshAccountInfo, DshAccountSignInState } from "@openbot/contracts/dsh-account";
 import type {
   MobileConnectedDevice,
-  MobileConnectPairing,
-  MobileConnectServiceState,
+  MobileConnectLink,
+  MobileConnectTicket,
   MobileDevicePlatform,
 } from "@openbot/contracts/mobile-connect";
 import { type DynamicRecord, isDynamicRecord } from "@openbot/contracts/runtime-values";
@@ -48,6 +48,7 @@ import {
   REMOTE_TICKET_PROTOCOL_VERSION,
   type RemoteTicketClaims,
 } from "@openbot/contracts/signal-protocol/ticket";
+import QRCode from "qrcode";
 
 // The LAN HTTP port. 8081 was the first choice and Metro took it, so the control plane moved here.
 const DEFAULT_HTTP_PORT = 47822;
@@ -103,6 +104,11 @@ interface PersistedPairing {
   sessionId: string | null;
   createdAt: number;
   expiresAt: number | null;
+  /**
+   * The raw ticket of a permanent link, kept so the settings tab can show the same link again. A
+   * one-time code never comes back, so only its hash is kept.
+   */
+  rawTicket: string | null;
 }
 
 interface PersistedState {
@@ -319,15 +325,6 @@ export class MobileConnectService {
 
   // ---- IPC surface
 
-  getState(): MobileConnectServiceState {
-    return {
-      enabled: this.#options.enabled !== false && this.#server !== null,
-      apiUrl: this.#apiOrigin,
-      signalUrl: this.#signalUrl(),
-      devices: this.listDevices(),
-    };
-  }
-
   listDevices(): readonly MobileConnectedDevice[] {
     return (this.#state?.sessions ?? []).map((session) => ({
       sessionId: session.sessionId,
@@ -339,15 +336,30 @@ export class MobileConnectService {
     }));
   }
 
-  async createPairing(): Promise<MobileConnectPairing> {
-    return this.#createPairing(PAIRING_CODE_TTL_MS);
+  /** One one-time code, rendered as the QR image the settings tab shows. */
+  async createMobileConnect(): Promise<MobileConnectTicket> {
+    const link = await this.#connectLink(PAIRING_CODE_TTL_MS);
+    return {
+      qrData: await QRCode.toDataURL(link, { margin: 1, width: 256 }),
+      expiresAt: Date.now() + PAIRING_CODE_TTL_MS,
+    };
   }
 
-  async createPermanentLink(): Promise<MobileConnectPairing> {
-    return this.#createPairing(null);
+  cancelMobileConnect(): void {
+    // The one-time codes live in the pairing list with their own expiry; a cancelled code simply
+    // ages out, and a replacement code already supersedes it on screen.
   }
 
-  async #createPairing(ttlMs: number | null): Promise<MobileConnectPairing> {
+  getMobileConnectLink(): MobileConnectLink | null {
+    const state = this.#state;
+    const pairing = state?.pairings.find((candidate) => candidate.expiresAt === null);
+    const identity = pairing ? this.#options.hostIdentity() : null;
+    if (!state || !pairing || !identity || !pairing.rawTicket) return null;
+    return { url: this.#connectUrl(identity, pairing.rawTicket), createdAt: pairing.createdAt };
+  }
+
+  /** Builds one pairing ticket and, for a permanent link, keeps the raw ticket for re-display. */
+  async #connectLink(ttlMs: number | null): Promise<MobileConnectLink["url"]> {
     const state = this.#requireState();
     const identity = this.#options.hostIdentity();
     if (!identity) throw new Error("The host identity is not ready yet; try again in a moment.");
@@ -359,21 +371,44 @@ export class MobileConnectService {
       sessionId: null,
       createdAt: Date.now(),
       expiresAt,
+      rawTicket: ttlMs === null ? ticket : null,
     });
     state.pairings = state.pairings.filter((pairing) => pairing.expiresAt === null || pairing.expiresAt > Date.now());
     await this.#persist(state);
+    return this.#connectUrl(identity, ticket);
+  }
+
+  #connectUrl(identity: MobileConnectHostIdentity, ticket: string): MobileConnectLink["url"] {
     const payload = new URLSearchParams({
-      api: this.#apiOrigin,
+      api: this.#apiOrigin ?? "",
       ticket,
       host: identity.hostId,
       fingerprint: identity.fingerprint,
     });
-    return {
-      link: `openbot://mobile-connect?${payload.toString()}`,
-      apiUrl: this.#apiOrigin,
-      ticket,
-      expiresAt,
-    };
+    return `openbot://mobile-connect?${payload.toString()}`;
+  }
+
+  async createMobileConnectLink(): Promise<MobileConnectLink> {
+    await this.#connectLink(null);
+    const link = this.getMobileConnectLink();
+    if (!link) throw new Error("The permanent link could not be created.");
+    return link;
+  }
+
+  /** Revokes the permanent link and every phone that paired through it. */
+  async revokeMobileConnectLink(): Promise<void> {
+    const state = this.#requireState();
+    const linkPairing = state.pairings.find((candidate) => candidate.expiresAt === null);
+    if (!linkPairing) return;
+    const viaLink = state.sessions.filter((session) => session.sessionId === linkPairing.sessionId);
+    state.pairings = state.pairings.filter((candidate) => candidate !== linkPairing);
+    state.sessions = state.sessions.filter((session) => session.sessionId !== linkPairing.sessionId);
+    if (viaLink.length > 0) state.authEpoch += 1;
+    await this.#persist(state);
+    for (const session of viaLink) {
+      await this.#options.revokeRemoteSession?.(session.sessionId);
+    }
+    this.#notifyDevicesChanged();
   }
 
   async revokeDevice(sessionId: string): Promise<void> {
@@ -387,21 +422,6 @@ export class MobileConnectService {
     await this.#persist(state);
     await this.#options.revokeRemoteSession?.(sessionId);
     this.#log(`Revoked the mobile session ${sessionId}.`);
-    this.#notifyDevicesChanged();
-  }
-
-  async unpairAll(): Promise<void> {
-    const state = this.#requireState();
-    if (state.sessions.length === 0) return;
-    const sessionIds = state.sessions.map((session) => session.sessionId);
-    state.sessions = [];
-    state.authEpoch += 1;
-    state.pairings = [];
-    await this.#persist(state);
-    for (const sessionId of sessionIds) {
-      await this.#options.revokeRemoteSession?.(sessionId);
-    }
-    this.#log("Revoked every mobile session.");
     this.#notifyDevicesChanged();
   }
 
@@ -925,7 +945,8 @@ function decodePersistedState(value: unknown): PersistedState | null {
       typeof entry.ticketHash !== "string" ||
       (entry.sessionId !== null && typeof entry.sessionId !== "string") ||
       typeof entry.createdAt !== "number" ||
-      (entry.expiresAt !== null && typeof entry.expiresAt !== "number")
+      (entry.expiresAt !== null && typeof entry.expiresAt !== "number") ||
+      (entry.rawTicket !== null && typeof entry.rawTicket !== "string")
     ) {
       return null;
     }
@@ -934,6 +955,7 @@ function decodePersistedState(value: unknown): PersistedState | null {
       sessionId: entry.sessionId,
       createdAt: entry.createdAt,
       expiresAt: entry.expiresAt,
+      rawTicket: entry.rawTicket,
     });
   }
   return {

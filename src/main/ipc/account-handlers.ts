@@ -16,12 +16,15 @@ export function accountIpcHandlers(input: {
   const { mobileConnect, dshSignIn } = input;
   return {
     auth: {
-      getState: handler(() => mobileConnect.getState()),
-      createPairing: handler(() => mobileConnect.createPairing()),
-      createPermanentLink: handler(() => mobileConnect.createPermanentLink()),
-      listDevices: handler(() => mobileConnect.listDevices()),
-      revokeDevice: payloadHandler(stringPayload("sessionId"), (sessionId) => mobileConnect.revokeDevice(sessionId)),
-      unpairAll: handler(() => mobileConnect.unpairAll()),
+      createMobileConnect: handler(() => mobileConnect.createMobileConnect()),
+      cancelMobileConnect: handler(() => mobileConnect.cancelMobileConnect()),
+      getMobileConnectLink: handler(() => mobileConnect.getMobileConnectLink()),
+      createMobileConnectLink: handler(() => mobileConnect.createMobileConnectLink()),
+      revokeMobileConnectLink: handler(() => mobileConnect.revokeMobileConnectLink()),
+      listMobileConnectedDevices: handler(() => mobileConnect.listDevices()),
+      revokeMobileConnectedDevice: payloadHandler(stringPayload("sessionId"), (sessionId) =>
+        mobileConnect.revokeDevice(sessionId),
+      ),
       getDshAccount: handler(() => mobileConnect.dshSignInState(dshSignIn.phase)),
       startDshSignIn: handler(() => dshSignIn.startSignIn()),
       cancelDshSignIn: handler(() => dshSignIn.cancelSignIn()),

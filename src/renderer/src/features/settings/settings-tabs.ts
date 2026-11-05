@@ -1,6 +1,17 @@
 import type { AppInfo } from "@openbot/contracts/ipc";
 import type { AppTextKey } from "@openbot/i18n";
-import { Bell, Bot, CircleArrowDown, Mic, MousePointer2, PanelTop, Settings, Sparkles, UserRound } from "@openbot/ui";
+import {
+  Bell,
+  Bot,
+  CircleArrowDown,
+  Mic,
+  MousePointer2,
+  PanelTop,
+  Settings,
+  Smartphone,
+  Sparkles,
+  UserRound,
+} from "@openbot/ui";
 
 export type SettingsTab =
   | "general"
@@ -11,6 +22,7 @@ export type SettingsTab =
   | "voice"
   | "dynamic-island"
   | "computer-use"
+  | "mobile-connect"
   | "updates";
 
 /**
@@ -143,6 +155,18 @@ export const navItems: ReadonlyArray<SettingsNavItem> = [
       { titleKey: "settings.updates.autoInstall.title", descriptionKey: "settings.updates.autoInstall.description" },
       { titleKey: "settings.updates.allowRemote.title", descriptionKey: "settings.updates.allowRemote.description" },
       { titleKey: "settings.updates.managed.title", descriptionKey: "settings.updates.managed.description" },
+    ],
+  },
+  {
+    value: "mobile-connect",
+    titleKey: "settings.tab.mobileConnect.title",
+    descriptionKey: "settings.tab.mobileConnect.description",
+    icon: Smartphone,
+    rows: [
+      { titleKey: "settings.mobileConnect.signIn.title", descriptionKey: "settings.mobileConnect.signIn.description" },
+      { titleKey: "settings.mobileConnect.link.title", descriptionKey: "settings.mobileConnect.link.description" },
+      { titleKey: "settings.mobileConnect.devices.title" },
+      { titleKey: "settings.dshAccount.title", descriptionKey: "settings.dshAccount.description" },
     ],
   },
 ];

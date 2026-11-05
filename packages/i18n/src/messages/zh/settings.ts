@@ -580,4 +580,14 @@ export const messages = {
   "settings.transfer.result.signInButton": "登录 {provider}",
   "settings.transfer.result.notImported": "未导入",
   "settings.transfer.result.warnings": "请检查以下内容",
+  // Mobile Connect 标签页里 fork 新增的 DeepSeek 账户行。
+  "settings.dshAccount.title": "DeepSeek 账户",
+  "settings.dshAccount.description": "这台电脑上 DeepSeek Harness 使用的账户。",
+  "settings.dshAccount.signedOut": "未登录。",
+  "settings.dshAccount.signedInAs": "已登录为 {name}。",
+  "settings.dshAccount.signingIn": "等待登录窗口…",
+  "settings.dshAccount.failed": "登录窗口关闭但没有带回账户。请重试。",
+  "settings.dshAccount.signIn": "登录",
+  "settings.dshAccount.cancel": "取消",
+  "settings.dshAccount.balance": "余额：{balance}",
 } as const satisfies PartialTranslation<typeof source>;

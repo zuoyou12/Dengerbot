@@ -475,7 +475,7 @@ import type {
   WorkflowVersionInput,
   WorkflowWebhookSecret,
 } from "./ipc-workflows";
-import type { MobileConnectedDevice, MobileConnectPairing, MobileConnectServiceState } from "./mobile-connect";
+import type { MobileConnectedDevice, MobileConnectLink, MobileConnectTicket } from "./mobile-connect";
 
 declare const payloadType: unique symbol;
 declare const resultType: unique symbol;
@@ -1542,15 +1542,19 @@ export const IPC_ENDPOINTS = {
     disconnect: request<string, void>()("remote-desktop:disconnect"),
     event: event<RemoteDesktopSession[]>()("remote-desktop:event"),
   },
-  // Pairing a phone with this computer: the QR and permanent link the settings tab shows, and the
-  // paired devices. The DSH account sign-in rides the same group because its row lives beside it.
+  // Pairing a phone with this computer: the QR a phone scans, the permanent link it pastes, and the
+  // paired devices — the surface the Mobile Connect settings tab drives. The DSH account sign-in
+  // rides the same group because its row lives beside it.
   auth: {
-    getState: request<undefined, MobileConnectServiceState>()("auth:get-state"),
-    createPairing: request<undefined, MobileConnectPairing>()("auth:create-pairing"),
-    createPermanentLink: request<undefined, MobileConnectPairing>()("auth:create-permanent-link"),
-    listDevices: request<undefined, readonly MobileConnectedDevice[]>()("auth:list-devices"),
-    revokeDevice: request<string, void>()("auth:revoke-device"),
-    unpairAll: request<undefined, void>()("auth:unpair-all"),
+    createMobileConnect: request<undefined, MobileConnectTicket>()("auth:create-mobile-connect"),
+    cancelMobileConnect: request<undefined, void>()("auth:cancel-mobile-connect"),
+    getMobileConnectLink: request<undefined, MobileConnectLink | null>()("auth:get-mobile-connect-link"),
+    createMobileConnectLink: request<undefined, MobileConnectLink>()("auth:create-mobile-connect-link"),
+    revokeMobileConnectLink: request<undefined, void>()("auth:revoke-mobile-connect-link"),
+    listMobileConnectedDevices: request<undefined, readonly MobileConnectedDevice[]>()(
+      "auth:list-mobile-connected-devices",
+    ),
+    revokeMobileConnectedDevice: request<string, void>()("auth:revoke-mobile-connected-device"),
     devicesChanged: event<readonly MobileConnectedDevice[]>()("auth:devices-changed"),
     getDshAccount: request<undefined, DshAccountSignInState>()("auth:get-dsh-account"),
     startDshSignIn: request<undefined, void>()("auth:start-dsh-sign-in"),

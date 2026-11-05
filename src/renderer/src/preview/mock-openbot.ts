@@ -2448,29 +2448,19 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
       discard: async () => undefined,
     },
     remoteDesktop: mockTeam.remoteDesktop,
-    // The preview has no phone and no DSH installation: an empty device list and an idle account.
-    getState: async () => ({
-      enabled: true,
-      apiUrl: "http://192.168.1.10:47822",
-      signalUrl: "ws://192.168.1.10:8088/v1/signal",
-      devices: [],
+    // The preview has no phone and no DSH installation: no pairing, an empty device list and an
+    // idle account.
+    createMobileConnect: async () => ({ qrData: "", expiresAt: Date.now() + 600_000 }),
+    cancelMobileConnect: async () => undefined,
+    getMobileConnectLink: async () => null,
+    createMobileConnectLink: async () => ({
+      url: "openbot://mobile-connect?api=http%3A%2F%2F192.168.1.10%3A47822&ticket=preview",
+      createdAt: Date.now(),
     }),
-    createPairing: async () => ({
-      link: "openbot://mobile-connect?api=http%3A%2F%2F192.168.1.10%3A47822&ticket=preview",
-      apiUrl: "http://192.168.1.10:47822",
-      ticket: "preview",
-      expiresAt: null,
-    }),
-    createPermanentLink: async () => ({
-      link: "openbot://mobile-connect?api=http%3A%2F%2F192.168.1.10%3A47822&ticket=preview",
-      apiUrl: "http://192.168.1.10:47822",
-      ticket: "preview",
-      expiresAt: null,
-    }),
-    listDevices: async () => [],
+    revokeMobileConnectLink: async () => undefined,
+    listMobileConnectedDevices: async () => [],
     onDevicesChanged: () => () => undefined,
-    revokeDevice: async () => undefined,
-    unpairAll: async () => undefined,
+    revokeMobileConnectedDevice: async () => undefined,
     getDshAccount: async () => ({ phase: "idle", account: null }),
     startDshSignIn: async () => undefined,
     cancelDshSignIn: async () => undefined,

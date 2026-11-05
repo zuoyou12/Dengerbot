@@ -94,11 +94,7 @@ import {
   requiredNumber,
   requiredString,
 } from "@openbot/contracts/ipc-decoding";
-import type {
-  MobileConnectedDevice,
-  MobileConnectPairing,
-  MobileConnectServiceState,
-} from "@openbot/contracts/mobile-connect";
+import type { MobileConnectedDevice, MobileConnectLink, MobileConnectTicket } from "@openbot/contracts/mobile-connect";
 import { isPluginSlug } from "@openbot/contracts/plugin-links";
 import { isBoolean, isNumber, isOneOf, isString } from "@openbot/contracts/runtime-values";
 
@@ -500,24 +496,19 @@ export function decodeMobileConnectedDevices(value: unknown): readonly MobileCon
   return decodeList(value, "paired device list", decodeMobileConnectedDevice);
 }
 
-export function decodeMobileConnectServiceState(value: unknown): MobileConnectServiceState {
-  const record = decodeRecord(value, "mobile connect state");
-  return {
-    enabled: requiredBoolean(record, "enabled"),
-    apiUrl: nullableString(record, "apiUrl"),
-    signalUrl: nullableString(record, "signalUrl"),
-    devices: decodeMobileConnectedDevices(record.devices),
-  };
+export function decodeMobileConnectTicket(value: unknown): MobileConnectTicket {
+  const record = decodeRecord(value, "mobile connect ticket");
+  return { qrData: requiredString(record, "qrData"), expiresAt: requiredNumber(record, "expiresAt") };
 }
 
-export function decodeMobileConnectPairing(value: unknown): MobileConnectPairing {
-  const record = decodeRecord(value, "mobile connect pairing");
-  return {
-    link: requiredString(record, "link"),
-    apiUrl: requiredString(record, "apiUrl"),
-    ticket: requiredString(record, "ticket"),
-    expiresAt: nullableNumber(record, "expiresAt"),
-  };
+export function decodeMobileConnectLink(value: unknown): MobileConnectLink {
+  const record = decodeRecord(value, "mobile connect link");
+  return { url: requiredString(record, "url"), createdAt: requiredNumber(record, "createdAt") };
+}
+
+export function decodeMobileConnectLinkOrNull(value: unknown): MobileConnectLink | null {
+  if (value === null) return null;
+  return decodeMobileConnectLink(value);
 }
 
 function decodeDshAccount(value: unknown): DshAccountInfo {
