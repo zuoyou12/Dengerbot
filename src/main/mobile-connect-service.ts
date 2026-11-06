@@ -1026,9 +1026,16 @@ function decodeDshHandoff(value: unknown): DshHandoff | null {
   if (!isDynamicRecord(value)) return null;
   const { signedIn, name, avatarUrl, currency, balance, updatedAt } = value;
   if (typeof signedIn !== "boolean" || typeof updatedAt !== "number") return null;
+  // A stamp more than a minute ahead means a clock mismatch or a forged file; either way the
+  // projection is not trustworthy this cycle.
+  if (updatedAt > Date.now() + 60_000) return null;
   const nullableText = (field: unknown): field is string | null => field === null || typeof field === "string";
   if (!nullableText(name) || !nullableText(avatarUrl) || !nullableText(currency) || !nullableText(balance)) {
     return null;
+  }
+  if (!signedIn) {
+    // A signed-out projection never carries identity or wallet residue from an older write.
+    return { signedIn, name: null, avatarUrl: null, currency: null, balance: null, updatedAt };
   }
   return { signedIn, name, avatarUrl, currency, balance, updatedAt };
 }

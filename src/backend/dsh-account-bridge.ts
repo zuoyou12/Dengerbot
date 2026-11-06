@@ -34,7 +34,7 @@ const DSH_ACCOUNT_BRIDGE_PLUGIN_SOURCE = `// Dengerbot's account bridge, install
 // Writes the display-safe DeepSeek account projection next to the DSH home; Dengerbot reads it.
 // The projection carries no tokens, sessions or device identifiers: DSH keeps those host-only, and
 // the service's own getProfile/getBalance results are already the display-safe layer.
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -53,8 +53,11 @@ const client = () => ({
 
 let lastSignature = null;
 let lastWriteAt = 0;
+// One writer at a time: a slow platform call must not let an older snapshot overwrite a newer one.
+let writeSequence = 0;
 
 async function rewrite(account, force) {
+  const sequence = ++writeSequence;
   try {
     const view = await account.getState();
     const signedIn = view?.status === "credential-stored";
@@ -78,9 +81,10 @@ async function rewrite(account, force) {
     // A change rewrites at once; an unchanged account still falls back to a periodic rewrite.
     const signature = JSON.stringify([signedIn, name, avatarUrl, currency, balance]);
     if (!force && signature === lastSignature && Date.now() - lastWriteAt < 15 * 60_000) return;
+    if (sequence !== writeSequence) return; // A newer poll is already past this point.
     const payload = { signedIn, name, avatarUrl, currency, balance, updatedAt: Date.now() };
     await mkdir(dirname(HANDOFF), { recursive: true });
-    const temporary = \`\${HANDOFF}.tmp\`;
+    const temporary = \\\`\${HANDOFF}.tmp\\\`;
     await writeFile(temporary, JSON.stringify(payload, null, 2), { mode: 0o600 });
     await rename(temporary, HANDOFF);
     lastSignature = signature;
@@ -127,8 +131,12 @@ export function installDshAccountBridge(home: string, profile: "acp" | "web"): v
     try {
       const parsed = JSON.parse(readFileSync(patchPath, "utf8"));
       if (Array.isArray(parsed)) entries = parsed;
-    } catch {
-      // No readable patch yet: start a fresh list rather than failing the sign-in window.
+    } catch (error) {
+      // A missing patch starts a fresh list. Any other read failure (permissions, IO) must reach
+      // the caller: treating it as "no configuration yet" would overwrite the user's own patch.
+      if (typeof error !== "object" || error === null || !("code" in error) || error.code !== "ENOENT") {
+        throw error;
+      }
     }
     const present = entries.some(
       (entry) => isDynamicRecord(entry) && JSON.stringify(entry.insert ?? null).includes(DSH_ACCOUNT_BRIDGE_ID),
