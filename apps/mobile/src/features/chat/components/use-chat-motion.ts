@@ -18,7 +18,7 @@ import { isAndroid } from "@/shared/lib/platform";
 import { chatContentIsVisible } from "../model/chat-layout";
 
 /** The space under each row of the list. */
-export const CHAT_ROW_GAP = 10;
+export const CHAT_ROW_GAP = 12;
 /** A message from search opens this far under the header. */
 const FOCUS_GAP = 12;
 /** On Android the chat takes the latest message this many frames after the last row has its size. */

@@ -2,6 +2,7 @@ import { rankAgentMentions } from "@openbot/contracts/agent-mention-rank";
 import { GlassView } from "expo-glass-effect";
 import { useIsFocused } from "expo-router";
 import { Button, Spinner, Typography } from "heroui-native";
+import { useThemeColor } from "heroui-native/hooks";
 import ArrowUp from "lucide-react-native/icons/arrow-up";
 import Blocks from "lucide-react-native/icons/blocks";
 import Mic from "lucide-react-native/icons/mic";
@@ -271,6 +272,9 @@ export const ChatComposer = memo(function ChatComposer({
   voicePalette,
 }: ChatComposerProps) {
   const { t, format, sourceText } = useText();
+  // The hairline that separates the fallback card from the near-black canvas; the token is the
+  // regular border (`--openbot-border`). Liquid Glass covers the card with its own material instead.
+  const fallbackBorderColor = useThemeColor("border");
   // A text-only composer has no menu or voice motion of its own; these stay at rest.
   const still = useSharedValue(0);
   const menuMotion = menuProgress ?? still;
@@ -982,6 +986,10 @@ export const ChatComposer = memo(function ChatComposer({
                 borderCurve: "continuous",
                 borderRadius: CARD_RADIUS,
                 overflow: "hidden",
+                // Without Liquid Glass the fallback surface sits flat on the near-black canvas; a
+                // hairline of the regular border token separates the card from the background.
+                borderColor: liquidGlassAvailable ? undefined : String(fallbackBorderColor),
+                borderWidth: liquidGlassAvailable ? undefined : 0.5,
                 opacity: disabled ? 0.45 : 1,
               },
               cardStyle,

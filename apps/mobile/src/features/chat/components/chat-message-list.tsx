@@ -123,7 +123,8 @@ const ROW_STYLE = { paddingBottom: CHAT_ROW_GAP };
 /** The side padding of the list. */
 const LIST_PADDING = 16;
 /** A user's message is at most this part of the list width, as `max-w-[92%]` on its row. */
-const USER_BUBBLE_WIDTH = 0.92;
+const USER_BUBBLE_WIDTH = 0.85;
+const USER_ATTACHMENT_WIDTH = 0.92;
 
 /** The list keeps the sizes it measured by message, so rows that stay keep their place when the data changes. */
 function rowKey(message: VisibleMessage): string {
@@ -649,7 +650,7 @@ const MessageRow = memo(function MessageRow({
             animateSize={shared.textReveal}
             className={
               message.author === "user"
-                ? `self-end rounded-[30px] px-4 py-3 ${userBubbleStyle || memberColor ? "" : "bg-control/60"} ${message.attachments?.length ? "max-w-[92%]" : "max-w-full"}`
+                ? `self-end rounded-[30px] border border-separator px-4 py-3 ${userBubbleStyle || memberColor ? "" : "bg-control/70"} ${message.attachments?.length ? "max-w-[92%]" : "max-w-[85%]"}`
                 : `max-w-full self-start rounded-[30px] ${waiting ? "" : "px-4 py-3"}`
             }
             style={[
@@ -712,8 +713,8 @@ const MessageRow = memo(function MessageRow({
         message.author === "agent"
           ? "max-w-full self-start gap-1"
           : message.attachments?.length
-            ? "max-w-full self-end gap-1"
-            : "max-w-[92%] self-end gap-1"
+            ? "max-w-[92%] self-end gap-1"
+            : "max-w-[85%] self-end gap-1"
       }
     >
       {message.replyToMessageId ? (
@@ -740,7 +741,11 @@ const MessageRow = memo(function MessageRow({
       ) : outbox ? (
         <OutboxMessageMenu
           status={outbox}
-          maxWidth={message.attachments?.length ? shared.listWidth : shared.listWidth * USER_BUBBLE_WIDTH}
+          maxWidth={
+            message.attachments?.length
+              ? shared.listWidth * USER_ATTACHMENT_WIDTH
+              : shared.listWidth * USER_BUBBLE_WIDTH
+          }
         >
           {rendered}
         </OutboxMessageMenu>

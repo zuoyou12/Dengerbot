@@ -68,7 +68,7 @@ export function ManualPairing({
           keyboardAppearance="dark"
           editable={!busy}
           multiline
-          className="min-h-20 rounded-xl border border-hairline px-3.5 py-3 text-base text-color"
+          className="min-h-20 rounded-xl border border-separator px-3.5 py-3 text-base text-color"
         />
         {error ? <Typography.Paragraph className="mt-2 text-danger-text">{error}</Typography.Paragraph> : null}
       </PaneItem>

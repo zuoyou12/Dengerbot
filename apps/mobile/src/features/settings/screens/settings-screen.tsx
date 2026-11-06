@@ -15,7 +15,8 @@ export function SettingsScreen() {
       <SettingsSection>
         <SettingsRow
           onPress={() => router.push("/settings/profile")}
-          supportingText={session?.user.email}
+          // The local account has a synthetic `local-…@dengerbot.local` address; showing it as the
+          // subtitle tells the user nothing, so the row shows the display name alone.
           leading={
             <ProfileAvatar
               neutral
