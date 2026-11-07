@@ -13,6 +13,9 @@ export interface FirstRunChoiceProps {
   loading: boolean;
   /** Why "Start free" still waits, or why the free provider failed. Empty when nothing blocks it. */
   reason: string;
+  /** The DeepSeek sign-in window is open. The other answer stays open, and the wait can be cancelled. */
+  accountSigningIn?: boolean | undefined;
+  onCancelAccountSignIn?: (() => void | Promise<void>) | undefined;
   onStartFree: () => void;
   /** Opens the list of plan providers. */
   onUsePlan: () => void;
@@ -75,11 +78,23 @@ export function FirstRunChoice(props: FirstRunChoiceProps) {
             <Spinner size="sm" label={t("onboarding.opening")} />
           </Show>
         </Button>
+        {/* While the sign-in window is open the wait owns the free row, but the other answer and the
+            cancel stay open: a window that landed behind this one must not trap the first run. */}
+        <Show when={props.accountSigningIn}>
+          <Button
+            type="button"
+            variant="ghost"
+            class="onboarding-description"
+            onClick={() => void props.onCancelAccountSignIn?.()}
+          >
+            {t("onboarding.choice.cancelAccountSignIn")}
+          </Button>
+        </Show>
         <Button
           type="button"
           variant="ghost"
           class="first-run-choice-row"
-          disabled={props.disabled}
+          disabled={props.disabled && !props.accountSigningIn}
           aria-label={t("onboarding.choice.subscription")}
           aria-describedby={planDetailId}
           onClick={() => props.onUsePlan()}

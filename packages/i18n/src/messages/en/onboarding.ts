@@ -75,6 +75,7 @@ export const messages = defineMessages("onboarding", {
   "onboarding.choice.freeDetail": "Uses your DeepSeek account. Pay per use.",
   "onboarding.choice.subscription": "I have a subscription",
   "onboarding.choice.subscriptionDetail": "ChatGPT or Claude",
+  "onboarding.choice.cancelAccountSignIn": "Cancel the sign-in and choose again",
   "onboarding.choice.startFreeInstead": "Use your DeepSeek account instead",
   "onboarding.plan.title": "Connect your plan",
   "onboarding.plan.description": "Sign in once. Your agents use your plan.",

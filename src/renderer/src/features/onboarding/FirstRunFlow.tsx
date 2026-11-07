@@ -151,11 +151,15 @@ export function FirstRunFlow(props: FirstRunFlowProps) {
     },
   );
 
-  // A sign-in window that closed without an account stops the wait, so Start free can open it again.
+  // A sign-in window that closed, or a cancelled sign-in, stops the wait, so the first question can
+  // open the window again or take the other path. Only an account handover keeps the wait alive.
   createEffect(
-    () => ({ waiting: state.finishWhenReady, failed: providers.accountSignInPhase() === "failed" }),
-    ({ waiting, failed }) => {
-      if (waiting && failed)
+    () => {
+      const phase = providers.accountSignInPhase();
+      return { waiting: state.finishWhenReady, stuck: phase === "failed" || phase === "idle" };
+    },
+    ({ waiting, stuck }) => {
+      if (waiting && stuck)
         setState((current) => {
           current.finishWhenReady = false;
         });
@@ -377,6 +381,8 @@ export function FirstRunFlow(props: FirstRunFlowProps) {
                   disabled={busy()}
                   loading={busy()}
                   reason={blockedReason()}
+                  accountSigningIn={providers.accountSignInPhase() === "signing-in"}
+                  onCancelAccountSignIn={() => void providers.cancelAccountSignIn(FREE_PROVIDER)}
                   onStartFree={startFree}
                   onUsePlan={usePlan}
                 />

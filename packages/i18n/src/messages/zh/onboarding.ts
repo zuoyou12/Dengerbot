@@ -74,6 +74,7 @@ export const messages = {
   "onboarding.choice.freeDetail": "使用你的 DeepSeek 账户，按用量计费。",
   "onboarding.choice.subscription": "我已有订阅",
   "onboarding.choice.subscriptionDetail": "ChatGPT、Claude",
+  "onboarding.choice.cancelAccountSignIn": "取消登录，返回选择",
   "onboarding.choice.startFreeInstead": "改用 DeepSeek 账号登录",
   "onboarding.plan.title": "连接你的套餐",
   "onboarding.plan.description": "登录一次，你的助手即可使用你的套餐。",
