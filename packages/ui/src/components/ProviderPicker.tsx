@@ -712,7 +712,10 @@ export function ProviderPicker(props: ProviderPickerProps) {
                           {t("provider.action.install")}
                         </Button>
                       </Show>
-                      <Show when={!runtimeStatus() && browserConnect()}>
+                      {/* Without runtime statuses this row falls back to a plain Connect — and the
+                      runtime action above already shows that same Connect, so this fallback only
+                      renders when no runtime action is on the row. */}
+                      <Show when={!runtimeStatus() && browserConnect() && !runtimeAction()}>
                         <Button
                           type="button"
                           variant={providerAction(state(), connecting()) === "connect" ? "default" : "outline"}
