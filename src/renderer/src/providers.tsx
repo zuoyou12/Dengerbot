@@ -318,11 +318,13 @@ const Providers = createSimpleContext({
     });
 
     /**
-     * The browser sign-in of this computer. Codex is the provider whose Connect runs it; its second
-     * way in (a device code) belongs to a host that can show one, and no surface here offers it.
+     * The browser sign-in of this computer. Codex and Claude are the providers whose Connect runs
+     * it: Codex opens the browser itself, and Claude's Connect runs the CLI login, which opens the
+     * browser the row follows. No provider here has a second way in (a device code), which belongs
+     * to a host that can show one.
      */
     const connection: ProviderConnection = {
-      connectKind: (provider) => (provider === "codex" ? "browser" : null),
+      connectKind: (provider) => (provider === "codex" || provider === "claude" ? "browser" : null),
       alternativeKind: () => null,
       connect: (provider) => connectProvider(provider),
       alternative: () => undefined,
