@@ -13,6 +13,11 @@ import { ProviderRuntimeFailure, runtimeIO } from "./provider-runtime-effects";
 const execFileAsync = promisify(execFile);
 
 const MAX_ARCHIVE_LIST_BYTES = 16 * 1024 * 1024;
+/** tar writes `./` before each name when the archive was made from `.`. */
+export function archiveEntryName(name: string): string {
+  return name.replace(/^(?:\.\/)+/u, "");
+}
+
 export const assertSafeArchive = Effect.fn("ProviderArchive.assertSafeArchive")(function* (
   path: string,
   allowedRoots: readonly string[],

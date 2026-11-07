@@ -157,6 +157,8 @@ export interface WorkflowsDependencies {
     connectionId: string,
     placeId: string,
     markdown: string,
+    /** `workflow-step:<id>`, so a retried step meets the outbox row it recorded. */
+    key: string,
   ): Effect.Effect<{ posted: true } | { failure: MessagingPostFailure }>;
   /** The workflow whose graph, title, versions or runs changed. */
   changed(workflowId: string): void;
@@ -379,24 +381,26 @@ class Workflows extends Context.Service<Workflows, WorkflowsShape>()("openbot/ba
         const startPost = (step: StoredWorkflowStep, output: WorkflowOutputDelivery): Effect.Effect<void> => {
           const post = Effect.gen(function* () {
             if (!runs.claimOutput(step.id, now())) return;
-            const result = yield* dependencies.post(output.connectionId, output.placeId, output.text).pipe(
-              // A stop or a defect during the post can leave it in part: the row says so, and does not stay `sending`.
-              Effect.onExit((exit) =>
-                Exit.isSuccess(exit)
-                  ? Effect.void
-                  : Effect.gen(function* () {
-                      runs.endOutput(step.id, "uncertain", "interrupted", now());
-                      // A stop settles its own step, and a restart leaves it to the first pass.
-                      if (Cause.hasInterruptsOnly(exit.cause)) return;
-                      logger.warn("A workflow output post stopped with a defect.", {
-                        stepId: step.id,
-                        cause: String(exit.cause),
-                      });
-                      settle(step, { status: "failed", error: outputError("uncertain") });
-                      yield* requestSweep();
-                    }),
-              ),
-            );
+            const result = yield* dependencies
+              .post(output.connectionId, output.placeId, output.text, `workflow-step:${step.id}`)
+              .pipe(
+                // A stop or a defect during the post can leave it in part: the row says so, and does not stay `sending`.
+                Effect.onExit((exit) =>
+                  Exit.isSuccess(exit)
+                    ? Effect.void
+                    : Effect.gen(function* () {
+                        runs.endOutput(step.id, "uncertain", "interrupted", now());
+                        // A stop settles its own step, and a restart leaves it to the first pass.
+                        if (Cause.hasInterruptsOnly(exit.cause)) return;
+                        logger.warn("A workflow output post stopped with a defect.", {
+                          stepId: step.id,
+                          cause: String(exit.cause),
+                        });
+                        settle(step, { status: "failed", error: outputError("uncertain") });
+                        yield* requestSweep();
+                      }),
+                ),
+              );
             if ("posted" in result) {
               runs.endOutput(step.id, "sent", null, now());
               settle(step, { status: "done", output: step.input });

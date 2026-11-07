@@ -9,6 +9,7 @@ import { AgentChatEmptyState } from "@openbot/ui/features/conversation/AgentChat
 import { AgentStepsDisclosure, type AgentStepsTrace } from "@openbot/ui/features/conversation/AgentSteps";
 import { AttachmentCards } from "@openbot/ui/features/conversation/AttachmentCards";
 import { UsageLimitAskCard } from "@openbot/ui/features/conversation/BackupModels";
+import { branchPointIds } from "@openbot/ui/features/conversation/branch-points";
 import { ChatActionMarker } from "@openbot/ui/features/conversation/ChatActionMarker";
 import { type ChatMessageAuthor, ChatMessageRow } from "@openbot/ui/features/conversation/ChatMessageRow";
 import { ChatRowBoundary } from "@openbot/ui/features/conversation/ChatRowBoundary";
@@ -46,6 +47,7 @@ import { groupedMessageIds } from "./agent-message-timeline";
 import { continuesSenderRun } from "./chat-grouping";
 import { isChatVisualAppShortcut } from "./chat-visual-shortcuts";
 import { chatVisualPageUrl } from "./chat-visual-url";
+import { isIncomingAgentMessage } from "./conversation-read-state";
 import { conversationRuntime } from "./conversation-runtime";
 import { useConversationViewScope } from "./conversation-scope";
 import type { ConversationProps } from "./conversation-types";
@@ -155,6 +157,7 @@ export function ConversationTimeline() {
     presentedQueueDeliveries,
     providerUpdateRequired,
     previewAttachment,
+    branchThread,
     props,
     mcpServers,
     reactToMessage,
@@ -220,6 +223,21 @@ export function ConversationTimeline() {
     if (reply) ids.add(reply);
     return ids;
   });
+  /** The answers of the agent that end a finished turn. Each one offers a branch. */
+  const branchPoints = createMemo(() =>
+    channel ? new Set<string>() : branchPointIds(timelineMessages(), props.activeTurnId),
+  );
+  /** Copies the agent's own chat through the answer into a new thread. A channel has no branch. */
+  const branchAction = (message: AgentMessage) => {
+    if (channel || !props.threads?.onBranch || !branchPoints().has(message.id)) return;
+    return () => void branchThread(null, message.id);
+  };
+  /** A message that counts as unread in an agent chat can be marked unread, with the messages after it. */
+  const markUnreadAction = (message: AgentMessage) => {
+    const onMarkUnread = props.onMarkUnread;
+    if (channel || !onMarkUnread || !isIncomingAgentMessage(message) || message.streaming) return;
+    return () => void onMarkUnread(message.id);
+  };
   /** Plays a spoken turn again: the user's own recording, or the agent's reply read aloud. */
   const voicePlayer = (message: AgentMessage | undefined) => {
     if (!message) return;
@@ -794,10 +812,7 @@ export function ConversationTimeline() {
                                             marker={marker()}
                                             agents={props.agents}
                                             announce={arrives}
-                                            routineAvailable={routineMarkerAvailable(
-                                              marker(),
-                                              availableRoutineIds(),
-                                            )}
+                                            routineAvailable={routineMarkerAvailable(marker(), availableRoutineIds())}
                                             onSelectAgent={props.onSelectAgent}
                                             onOpenRoutine={openRoutineSettings}
                                             onOpenHostedSite={(url) => void openExternalMessageUrl(url)}
@@ -814,9 +829,7 @@ export function ConversationTimeline() {
                                             routine={card().routine}
                                             connected={webhookRoutines.state.connected}
                                             secret={webhookRoutines.state.secrets[card().routine.id] ?? null}
-                                            onSecret={(secret) =>
-                                              webhookRoutines.setSecret(card().routine.id, secret)
-                                            }
+                                            onSecret={(secret) => webhookRoutines.setSecret(card().routine.id, secret)}
                                             onOpenRoutine={openRoutineSettings}
                                           />
                                         )}
@@ -1250,6 +1263,8 @@ export function ConversationTimeline() {
                                     }}
                                     {...messageActions}
                                     readAloud={messageReadAloud()}
+                                    onBranch={branchAction(message() ?? initialMessage)}
+                                    branchDisabled={Boolean(props.activeTurnId)}
                                   />
                                 </Show>
                               </>
@@ -1264,6 +1279,9 @@ export function ConversationTimeline() {
                                       authorName={channel ? author().name : undefined}
                                       {...messageActions}
                                       readAloud={messageReadAloud()}
+                                      onMarkUnread={markUnreadAction(message() ?? initialMessage)}
+                                      onBranch={branchAction(message() ?? initialMessage)}
+                                      branchDisabled={Boolean(props.activeTurnId)}
                                     />
                                   )
                             }

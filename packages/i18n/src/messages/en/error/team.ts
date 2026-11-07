@@ -18,6 +18,8 @@ export const messages = defineMessages("error.team", {
   "error.team.permanentInviteLimit": "A host can have up to {limit} permanent invitation links.",
   "error.team.activeInviteLimit": "A host can have up to {limit} active invitations.",
   "error.team.inviteInvalid": "The invitation is invalid or expired.",
+  "error.team.agentFoldersUnsupported": "The agent folders are not supported by this connection.",
+  "error.team.folderUnavailable": "This folder is not available on the host computer.",
   "error.team.inviteEmailMismatch": "This invitation belongs to a different email address.",
   "error.team.memberDisabled": "This team member is disabled.",
   "error.team.memberLimit": "A host can have up to {limit} members.",

@@ -26,6 +26,9 @@ export function ProfileSettingsScreen() {
   const locked = useRef(false);
   const [error, setError] = useState<string | null>(null);
   if (!session) return null;
+  // A paired identity is read-only here: the name and photo live on the desktop that signed the
+  // phone in, and only the desktop can change them. Sign-out stays, with its confirmation.
+  const paired = Boolean(session.host);
   const busy = pendingAction !== null;
   const name = draftName ?? savedName;
   const validatedName = validateProfileName(name);
@@ -101,62 +104,90 @@ export function ProfileSettingsScreen() {
       keyboardDismissMode="interactive"
       keyboardShouldPersistTaps="handled"
     >
-      <SheetSaveAction
-        dirty={nameChanged}
-        canSave={!busy && !validatedName.error}
-        pending={pendingAction === "name"}
-        label={t("mobile.settings.profile.saveName")}
-        onSave={() => void saveName()}
-      />
-      <View className="gap-6">
-        <Pressable
-          className="self-center"
-          accessibilityRole="button"
-          accessibilityLabel={
-            avatarUrl ? t("mobile.settings.profile.editPhoto") : t("mobile.settings.profile.addPhoto")
-          }
-          accessibilityState={{ disabled: busy }}
-          disabled={busy}
-          onPress={editPhoto}
-        >
-          <ProfileAvatar neutral name={savedName} imageUrl={avatarUrl} size={112} />
-          <View className="absolute right-0 bottom-0 size-9 items-center justify-center rounded-full border-4 border-sheet bg-grouped">
-            <Camera color={foreground} size={14} />
-          </View>
-        </Pressable>
-        <SheetFormField
-          label={t("mobile.settings.profile.name")}
-          appearance="soft"
-          placeholder={t("mobile.settings.profile.namePlaceholder")}
-          autoCapitalize="words"
-          autoCorrect={false}
-          returnKeyType="done"
-          value={name}
-          editable={!busy}
-          onChangeText={(value) => {
-            setDraftName(value);
-            setError(null);
-          }}
-          onSubmitEditing={() => void saveName()}
+      {paired ? null : (
+        <SheetSaveAction
+          dirty={nameChanged}
+          canSave={!busy && !validatedName.error}
+          pending={pendingAction === "name"}
+          label={t("mobile.settings.profile.saveName")}
+          onSave={() => void saveName()}
         />
+      )}
+      <View className="gap-6">
+        {paired ? (
+          <View className="self-center">
+            <ProfileAvatar neutral name={savedName} imageUrl={avatarUrl} size={112} />
+          </View>
+        ) : (
+          <Pressable
+            className="self-center"
+            accessibilityRole="button"
+            accessibilityLabel={
+              avatarUrl ? t("mobile.settings.profile.editPhoto") : t("mobile.settings.profile.addPhoto")
+            }
+            accessibilityState={{ disabled: busy }}
+            disabled={busy}
+            onPress={editPhoto}
+          >
+            <ProfileAvatar neutral name={savedName} imageUrl={avatarUrl} size={112} />
+            <View className="absolute right-0 bottom-0 size-9 items-center justify-center rounded-full border-4 border-sheet bg-grouped">
+              <Camera color={foreground} size={14} />
+            </View>
+          </Pressable>
+        )}
+        {paired ? (
+          <SettingsSection>
+            <SettingsRow>
+              <Typography.Paragraph selectable>{name}</Typography.Paragraph>
+            </SettingsRow>
+          </SettingsSection>
+        ) : (
+          <SheetFormField
+            label={t("mobile.settings.profile.name")}
+            appearance="soft"
+            placeholder={t("mobile.settings.profile.namePlaceholder")}
+            autoCapitalize="words"
+            autoCorrect={false}
+            returnKeyType="done"
+            value={name}
+            editable={!busy}
+            onChangeText={(value) => {
+              setDraftName(value);
+              setError(null);
+            }}
+            onSubmitEditing={() => void saveName()}
+          />
+        )}
       </View>
-      {nameError || error ? (
-        <Typography.Paragraph accessibilityRole="alert" className="text-danger-text">
-          {nameError ?? error}
-        </Typography.Paragraph>
-      ) : null}
-      <SettingsSection title={t("mobile.settings.profile.email")}>
-        <SettingsRow>
-          <Typography.Paragraph selectable className="text-grouped-secondary">
-            {session.user.email}
-          </Typography.Paragraph>
-        </SettingsRow>
-      </SettingsSection>
-      <SettingsSection title={t("mobile.settings.profile.security")}>
-        <SettingsRow disabled={busy} onPress={() => router.push("/settings/sessions")}>
-          <Typography.Paragraph>{t("mobile.settings.profile.accountSessions")}</Typography.Paragraph>
-        </SettingsRow>
-      </SettingsSection>
+      {paired ? (
+        <SettingsSection>
+          <SettingsRow>
+            <Typography.Paragraph selectable className="text-grouped-secondary">
+              {t("mobile.settings.profile.pairedIdentity")}
+            </Typography.Paragraph>
+          </SettingsRow>
+        </SettingsSection>
+      ) : (
+        <>
+          {nameError || error ? (
+            <Typography.Paragraph accessibilityRole="alert" className="text-danger-text">
+              {nameError ?? error}
+            </Typography.Paragraph>
+          ) : null}
+          <SettingsSection title={t("mobile.settings.profile.email")}>
+            <SettingsRow>
+              <Typography.Paragraph selectable className="text-grouped-secondary">
+                {session.user.email}
+              </Typography.Paragraph>
+            </SettingsRow>
+          </SettingsSection>
+          <SettingsSection title={t("mobile.settings.profile.security")}>
+            <SettingsRow disabled={busy} onPress={() => router.push("/settings/sessions")}>
+              <Typography.Paragraph>{t("mobile.settings.profile.accountSessions")}</Typography.Paragraph>
+            </SettingsRow>
+          </SettingsSection>
+        </>
+      )}
       <SettingsSection>
         <SettingsRow
           disclosure={false}

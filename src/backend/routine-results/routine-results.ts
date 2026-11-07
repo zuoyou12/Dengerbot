@@ -59,6 +59,8 @@ export interface RoutineResultsDependencies {
     connectionId: string,
     placeId: string,
     markdown: string,
+    /** The run's id, so a retried delivery meets the outbox row it recorded. */
+    key: string,
   ): Effect.Effect<{ posted: true } | { failure: MessagingPostFailure }>;
   /** The agents whose routine deliveries changed. */
   changed(agentIds: string[]): void;
@@ -177,7 +179,7 @@ class RoutineResults extends Context.Service<RoutineResults, RoutineResultsShape
           }
           if (!store.claim(item.runId, startedAt.toISOString())) return;
           const result = yield* dependencies
-            .post(item.destination.connectionId, item.destination.placeId, item.text)
+            .post(item.destination.connectionId, item.destination.placeId, item.text, item.runId)
             .pipe(
               // A stop or a defect during the post can leave it in part: the row says so, and does not stay `sending`.
               Effect.onExit((exit) =>

@@ -11,6 +11,7 @@ import type {
   AgentStatus,
   AgentSummary,
   CapabilityState,
+  CustomAgentUsage,
   CustomProviderRestart,
   ProviderCodeLoginStart,
   ProviderUsageResetOutcome,
@@ -19,6 +20,8 @@ import type {
 import {
   accountUsageCoversModel,
   agentProviderDescriptor,
+  CUSTOM_AGENT_DEFAULT_MODEL,
+  CUSTOM_AGENT_LIMITS,
   DEFAULT_PROVIDER_ACCOUNT_ID,
   isAgentProvider,
   workspaceAccessEnforced,
@@ -52,7 +55,12 @@ import {
   getString,
 } from "./../protocol";
 import { ProviderSignInError } from "../provider-client-effects";
-import { BUILT_IN_PROVIDER_DRIVERS, type ProviderClientContext, requireProviderDriver } from "./../provider-drivers";
+import {
+  BUILT_IN_PROVIDER_DRIVERS,
+  type ProviderClientContext,
+  requireProviderDriver,
+  savedCustomAgents,
+} from "./../provider-drivers";
 import { ProviderTempDiskSpaceError } from "../provider-temp";
 import { startProviderTerminalLogin } from "../provider-terminal-login";
 import { recordRestartActivity } from "../restart-activity";
@@ -89,7 +97,7 @@ import {
   waitForSuccessfulProcess,
 } from "./provider-status";
 import { providerForAgent, providerLabel } from "./thread-items";
-import { workspaceWritableRoots } from "./workspace-sandbox";
+import { checkAgentFolders, workspaceExcludedFolders, workspaceWritableRoots } from "./workspace-sandbox";
 
 const logger = createOpenBotLogger("provider-runtime");
 /**
@@ -101,6 +109,9 @@ const stderrLogger = createOpenBotLogger("provider-stderr");
 const ACCOUNT_USAGE_READ_TIMEOUT_MS = 30_000;
 /** A read this recent answers a second request, such as one that waited for the read before it. */
 /** The providers whose app server spends a usage reset credit (`account/rateLimitResetCredit/consume`). */
+const CUSTOM_AGENT_USAGE_REUSE_MS = 60_000;
+/** How long a released `acp` answers a usage read with before the dock may start it again. */
+const CUSTOM_AGENT_USAGE_WAKE_MS = 60 * 60_000;
 const USAGE_RESET_PROVIDERS: ReadonlySet<AgentProvider> = new Set(["codex"]);
 /**
  * How long a start may take when it holds back no other provider: the first start of a CLI that was
@@ -358,6 +369,7 @@ export class ProviderRuntime implements ProviderPort {
   readonly #providerStarts = new Map<AgentProvider, Deferred.Deferred<void, ProviderOperationFailed>>();
   readonly #providerConnectionCommands = new Map<AgentProvider, Deferred.Deferred<void, ProviderOperationFailed>>();
   readonly #replacingCli = new Set<AgentProvider>();
+  #removingCustomRuntime = false;
   /**
    * Providers whose idle process was stopped to give its memory back. Each one keeps its status,
    * account and models, so every view reads it as connected; `ensureProvider` starts it again.
@@ -374,6 +386,8 @@ export class ProviderRuntime implements ProviderPort {
    * `isReplacingCli` meanwhile, so new turns do not keep the update waiting.
    */
   readonly #updatesWhenIdle = new Set<AgentProvider>();
+  /** A custom agent change that a turn delayed. The idle check applies it when the turn stops. */
+  #customAgentsReloadPending = false;
   /**
    * Providers that a turn kept on the old agent environment or OpenCode config. The idle check
    * restarts each after its turn.
@@ -401,6 +415,13 @@ export class ProviderRuntime implements ProviderPort {
    * every five minutes, so starting a released one to ask again would keep its process running.
    */
   readonly #usageUnreported = new Set<AgentProvider>();
+  /**
+   * The last answer of each custom agent's usage prompt, with the prompt and the time of the read. A
+   * null text is a read that gave no answer, kept so that a released `acp` does not start for it again.
+   */
+  readonly #customAgentUsage = new Map<string, { prompt: string; text: string | null; readAt: number }>();
+  /** One usage read at a time, so that a second request does not send the prompts again. */
+  readonly #customAgentUsageLock = Semaphore.makeUnsafe(1);
   #idleCheck: NodeJS.Timeout | null = null;
   /** Each provider's sign-in file, and the version of it that the last account check saw. */
   readonly #signInFiles = new Map<AgentProvider, { path: string; seen: string }>();
@@ -686,6 +707,11 @@ export class ProviderRuntime implements ProviderPort {
   ) {
     return yield* Effect.gen({ self: this }, function* () {
       yield* providerStep(() => this.requireProviderOn(provider));
+      if (provider === "acp" && savedCustomAgents(this.#credentials).length === 0) {
+        return yield* new ProviderOperationFailed({
+          cause: new CodexCliError(sourceText("error.provider.customAgentNone"), "missing"),
+        });
+      }
       const driver = requireProviderDriver(provider);
       const bundledExecutable = this.#bundledExecutables[driver.cliProvider ?? provider];
       const cli = yield* driver
@@ -748,6 +774,7 @@ export class ProviderRuntime implements ProviderPort {
 
   readonly #releaseIdleProviders = Effect.fn("ProviderRuntime.releaseIdleProviders")(function* (this: ProviderRuntime) {
     if (this.#hooks.isStopping() || this.#status.phase !== "ready") return;
+    if (this.#customAgentsReloadPending && !this.#hooks.isProviderBusy("acp")) yield* this.reloadCustomAgents();
     for (const provider of this.#environmentReloadPending) {
       if (!this.#hooks.isProviderBusy(provider)) yield* this.#reloadAgentEnvironment(provider);
     }
@@ -812,6 +839,8 @@ export class ProviderRuntime implements ProviderPort {
 
   createProfileClient(provider: AgentProvider): AgentClient {
     this.requireProviderOn(provider);
+    if (provider === "acp" && this.#removingCustomRuntime)
+      throw new Error(sourceText("error.provider.registryRemoveBusy"));
     const cli = this.#cli.get(provider);
     if (!cli || !this.#clients.has(provider)) throw new Error(sourceText("error.provider.connectBeforeProfile"));
     if (this.#clientFactory) return this.#clientFactory(provider, cli);
@@ -1039,6 +1068,75 @@ export class ProviderRuntime implements ProviderPort {
       .pipe(toProviderOperationFailed);
   }
 
+  /**
+   * The answers of the custom agents to their usage prompts, for the rail. The answer is text, not
+   * windows, so the provider `acp` keeps `reportsUsage: false` and its limit errors stay turn errors.
+   * The rail polls every five minutes. A released `acp` shows the last answers, and starts again only
+   * when an answer is older than an hour or its prompt changed. An agent with no answer is left out.
+   */
+  readonly customAgentUsage = Effect.fn("ProviderRuntime.customAgentUsage")(function* (
+    this: ProviderRuntime,
+  ): Effect.fn.Return<CustomAgentUsage[]> {
+    return yield* this.#customAgentUsageLock.withPermit(this.#readCustomAgentUsage());
+  }).bind(this);
+
+  readonly #readCustomAgentUsage = Effect.fn("ProviderRuntime.readCustomAgentUsage")(function* (
+    this: ProviderRuntime,
+  ): Effect.fn.Return<CustomAgentUsage[]> {
+    const agents = savedCustomAgents(this.#credentials).flatMap((agent) =>
+      agent.usagePrompt === null ? [] : [{ id: agent.id, prompt: agent.usagePrompt }],
+    );
+    for (const id of this.#customAgentUsage.keys())
+      if (!agents.some((agent) => agent.id === id)) this.#customAgentUsage.delete(id);
+    if (agents.length === 0 || this.#off.has("acp")) return [];
+    const kept = (): CustomAgentUsage[] =>
+      agents.flatMap(({ id }) => {
+        const text = this.#customAgentUsage.get(id)?.text;
+        return text == null ? [] : [{ id, text }];
+      });
+    const readWithin = (ms: number) =>
+      agents.every(({ id, prompt }) => {
+        const entry = this.#customAgentUsage.get(id);
+        return entry !== undefined && entry.prompt === prompt && Date.now() - entry.readAt < ms;
+      });
+    if (readWithin(CUSTOM_AGENT_USAGE_REUSE_MS)) return kept();
+    if (this.#released.has("acp") && readWithin(CUSTOM_AGENT_USAGE_WAKE_MS)) return kept();
+    if (!this.#clients.has("acp")) yield* this.ensureProvider("acp").pipe(this.#logUsageFailure("acp"));
+    const client = this.#clients.get("acp");
+    const readUsageText = client?.readUsageText?.bind(client);
+    if (!readUsageText) return kept();
+    yield* Effect.forEach(
+      agents,
+      ({ id, prompt }) =>
+        readUsageText(`${id}/${CUSTOM_AGENT_DEFAULT_MODEL}`, prompt).pipe(
+          toProviderOperationFailed,
+          Effect.timeoutOrElse({
+            duration: ACCOUNT_USAGE_READ_TIMEOUT_MS,
+            orElse: () => Effect.fail(new ProviderOperationFailed({ cause: new Error("Usage read timed out.") })),
+          }),
+          Effect.map((answer) => answer?.slice(0, CUSTOM_AGENT_LIMITS.usageAnswer) ?? null),
+          Effect.catch((error: ProviderOperationFailed) =>
+            Effect.sync(() => {
+              logger.warn("Could not read custom agent usage.", {
+                provider: "acp",
+                message: error.cause instanceof Error ? this.#redactMcp(error.cause.message) : "unknown",
+              });
+              // A failed read keeps the last answer to the same prompt on the rail.
+              const previous = this.#customAgentUsage.get(id);
+              return previous?.prompt === prompt ? previous.text : null;
+            }),
+          ),
+          Effect.tap((text) =>
+            Effect.sync(() => {
+              this.#customAgentUsage.set(id, { prompt, text, readAt: Date.now() });
+            }),
+          ),
+        ),
+      { concurrency: "unbounded", discard: true },
+    );
+    return kept();
+  });
+
   #logUsageFailure(provider: AgentProvider) {
     return Effect.catch((error: ProviderOperationFailed | ProviderAccountFailed) =>
       Effect.sync(() => {
@@ -1126,6 +1224,8 @@ export class ProviderRuntime implements ProviderPort {
     this: ProviderRuntime,
     provider: AgentProvider,
   ) {
+    if (provider === "acp" && this.#removingCustomRuntime)
+      return yield* new ProviderOperationFailed({ cause: new Error(sourceText("error.provider.registryRemoveBusy")) });
     yield* providerStep(() => this.requireProviderOn(provider));
     this.#lastUsed.set(provider, Date.now());
     if (this.#clients.has(provider)) return;
@@ -1180,7 +1280,7 @@ export class ProviderRuntime implements ProviderPort {
     options: { notifyReady?: boolean; preserveCheckErrors?: boolean; refreshRuntimeInBackground?: boolean },
     phase: "starting" | "restarting" = "starting",
   ) {
-    if (this.#off.has(provider)) return;
+    if (this.#off.has(provider) || (provider === "acp" && this.#removingCustomRuntime)) return;
     const pending = this.#providerStarts.get(provider);
     if (pending) return yield* Deferred.await(pending);
     const completion = Deferred.makeUnsafe<void, ProviderOperationFailed>();
@@ -1582,6 +1682,72 @@ export class ProviderRuntime implements ProviderPort {
     if (Result.isFailure(result) && this.#hooks.isProviderBusy(provider)) this.#environmentReloadPending.add(provider);
   }, Effect.uninterruptible);
 
+  /**
+   * Replaces the router of the custom agents, so a saved, changed or removed agent reaches it. The
+   * same rules as `reloadCustomProviderConfig` apply: a turn in progress wins, and it never throws. The
+   * first saved agent starts the provider; with the last one removed, the provider stops. A change
+   * that a turn delays is applied by the idle check after the turn stops, as the saved message says.
+   */
+
+  readonly reloadCustomAgents = Effect.fn("ProviderRuntime.reloadCustomAgents")(function* (this: ProviderRuntime) {
+    this.#customAgentsReloadPending = false;
+    const result = yield* this.#reloadCustomAgents();
+    if (result === "skipped-busy") this.#customAgentsReloadPending = true;
+    return result;
+  }, Effect.uninterruptible).bind(this);
+
+  readonly #reloadCustomAgents = Effect.fn("ProviderRuntime.reloadCustomAgentProcess")(function* (
+    this: ProviderRuntime,
+  ): Effect.fn.Return<CustomProviderRestart, ProviderOperationFailed> {
+    if (!this.#clients.has("acp")) {
+      if (this.#released.has("acp") || savedCustomAgents(this.#credentials).length === 0) return "not-running";
+      yield* this.refreshProvider("acp").pipe(toProviderOperationFailed);
+      return this.#clients.has("acp") ? "restarted" : "not-running";
+    }
+    if (this.#hooks.isProviderBusy("acp")) return "skipped-busy";
+    const result = yield* Effect.result(this.#runProviderConnectionCommand("acp", () => this.#reprobeProvider("acp")));
+    if (Result.isFailure(result)) {
+      if (this.#hooks.isProviderBusy("acp")) return "skipped-busy";
+      if (savedCustomAgents(this.#credentials).length === 0) yield* this.#stopProviderClient("acp");
+    }
+    return "restarted";
+  }, Effect.uninterruptible);
+
+  /** Holds ACP process ownership while managed executable files are removed. */
+  withCustomAgentRuntimeRemoval<T>(
+    operation: () => Effect.Effect<T, ProviderOperationFailed>,
+  ): Effect.Effect<T, ProviderOperationFailed> {
+    return this.#runProviderConnectionCommand(
+      "acp",
+      () =>
+        Effect.gen({ self: this }, function* () {
+          this.#removingCustomRuntime = true;
+          this.#replacingCli.add("acp");
+          recordRestartActivity();
+          return yield* Effect.gen({ self: this }, function* () {
+            const start = this.#providerStarts.get("acp");
+            if (start) yield* Deferred.await(start).pipe(Effect.ignore);
+            for (const pending of this.#confinedStarts.values()) yield* Deferred.await(pending).pipe(Effect.ignore);
+            if (this.#hooks.isProviderBusy("acp"))
+              return yield* new ProviderOperationFailed({
+                cause: new Error(sourceText("error.provider.registryRemoveBusy")),
+              });
+            yield* this.#stopProviderClient("acp");
+            return yield* operation();
+          }).pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                this.#removingCustomRuntime = false;
+                this.#replacingCli.delete("acp");
+                this.#hooks.onProviderResumed("acp");
+              }),
+            ),
+          );
+        }),
+      false,
+    );
+  }
+
   /** Stops a provider's shared process and every Workspace only process of it, with no restart. */
   readonly #stopProviderClient = Effect.fn("ProviderRuntime.stopProviderClient")(function* (
     this: ProviderRuntime,
@@ -1853,6 +2019,8 @@ export class ProviderRuntime implements ProviderPort {
    */
   requireReadyClientForAgent(agent: AgentSummary): AgentClient {
     const provider = providerForAgent(agent);
+    if (provider === "acp" && this.#removingCustomRuntime)
+      throw new Error(sourceText("error.provider.registryRemoveBusy"));
     if (!this.#confined.has(agent.id) && !this.#ownProcessFor(agent)) return this.requireReadyClient(provider);
     const client = this.clientForAgent(agent);
     if (!client) throw new Error(sourceText("error.provider.noAgentProcess", { provider: providerLabel(provider) }));
@@ -1882,6 +2050,9 @@ export class ProviderRuntime implements ProviderPort {
     const provider = providerForAgent(agent);
     yield* this.ensureProvider(provider);
     yield* this.#awaitConfinedStart(agent.id);
+    if (provider === "acp" && this.#removingCustomRuntime)
+      return yield* new ProviderOperationFailed({ cause: new Error(sourceText("error.provider.registryRemoveBusy")) });
+    yield* checkAgentFolders(agent);
     const own = this.#ownProcessFor(agent);
     const current = this.#confined.get(agent.id);
     const key = own ? this.#confinedKey(provider, own) : null;
@@ -1914,7 +2085,14 @@ export class ProviderRuntime implements ProviderPort {
     const account = this.#providerAccounts?.account(provider, agent.providerAccountId) ?? null;
     if (!confined && !account) return null;
     return {
-      ...(confined ? { confinement: { writableRoots: workspaceWritableRoots(agent, this.#hooks.sharedRoot()) } } : {}),
+      ...(confined
+        ? {
+            confinement: {
+              writableRoots: workspaceWritableRoots(agent, this.#hooks.sharedRoot()),
+              excludedFolders: workspaceExcludedFolders(agent),
+            },
+          }
+        : {}),
       ...(account ? { account } : {}),
     };
   }
@@ -1930,6 +2108,7 @@ export class ProviderRuntime implements ProviderPort {
       cli?.version ?? null,
       this.#activations.get(provider) ?? 0,
       own.confinement?.writableRoots ?? null,
+      own.confinement?.excludedFolders ?? null,
       own.account?.id ?? null,
     ]);
   }
@@ -2094,6 +2273,8 @@ export class ProviderRuntime implements ProviderPort {
   }
 
   requireReadyClient(provider: AgentProvider): AgentClient {
+    if (provider === "acp" && this.#removingCustomRuntime)
+      throw new Error(sourceText("error.provider.registryRemoveBusy"));
     const client = this.clientFor(provider);
     if (!client || this.#status.phase !== "ready") {
       throw new Error(

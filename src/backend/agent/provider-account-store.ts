@@ -24,7 +24,7 @@ export interface StoredProviderAccount {
 }
 
 const ACCOUNT_ID = /^a[0-9a-f]{16}$/u;
-const Provider = Schema.Literals(AGENT_PROVIDERS.filter((provider) => (provider as string) !== "acp"));
+const Provider = Schema.Literals(AGENT_PROVIDERS.filter((provider) => provider !== "acp"));
 const LabelText = Schema.String.check(Schema.isMaxLength(PROVIDER_ACCOUNT_LABEL_MAX_LENGTH));
 const Label = Schema.NullOr(LabelText);
 const ProviderAccountsFile = Schema.Struct({
@@ -108,7 +108,7 @@ export class ProviderAccountStore {
     this: ProviderAccountStore,
     provider: AgentProviderId,
   ) {
-    if ((provider as string) === "acp")
+    if (provider === "acp")
       return yield* new ProviderAccountStoreFailed({
         cause: new Error("Custom agents do not have provider accounts."),
       });

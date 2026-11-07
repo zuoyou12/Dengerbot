@@ -85,6 +85,7 @@ import {
   parseAgentId,
   parseAgentTask,
   parseApprovalResponse,
+  parseBranchAgentTask,
   parseBrowserTakeoverResponse,
   parseCancelAgentWait,
   parseCancelMessageLink,
@@ -93,6 +94,7 @@ import {
   parseCreateAgent,
   parseInterrupt,
   parseMarkConversationRead,
+  parseMarkConversationUnread,
   parseMessageReaction,
   parseOpenMessageLink,
   parseOptionalAgentId,
@@ -563,6 +565,12 @@ export function agentIpcHandlers({
         local: (parsed) => runCauseEffect(host.markAgentConversationRead(parsed)),
         remote: (parsed, serverId) => runCauseEffect(remoteServers.markAgentConversationRead(parsed, serverId)),
       }),
+      markConversationUnread: scopedHandler(parseMarkConversationUnread, {
+        local: (parsed) => runCauseEffect(host.markAgentConversationUnread(parsed)),
+        remote: () => {
+          throw new Error(sourceText("error.backend.markUnreadRemoteUnsupported"));
+        },
+      }),
       sendMessage: scopedHandler(parseSendMessage, {
         local: (input) => runCauseEffect(service.sendMessage(input, host.conversationSender())),
         remote: (input, serverId) => {
@@ -633,7 +641,7 @@ export function agentIpcHandlers({
         local: (input) => runCauseEffect(service.startTask(input, host.conversationSender())),
         // `agent-tasks-v1` carries text only.
         remote: (input, serverId) => {
-          if (input.attachmentDraftIds?.length) taskRemoteUnsupported();
+          if (input.attachmentDraftIds?.length || input.isolatedWorktree) taskRemoteUnsupported();
           return remoteTaskRequest(serverId, AGENT_TASKS_ROUTES.start, decodeRemoteAgentTask, {
             agentId: input.agentId,
             text: input.text,
@@ -644,6 +652,11 @@ export function agentIpcHandlers({
       // Local only: `agent-tasks-v1` does not move a queued message into a task.
       runQueuedMessageAsTask: scopedHandler(parseRunQueuedMessageAsTask, {
         local: (parsed) => runCauseEffect(service.runQueuedMessageAsTask(parsed)),
+        remote: taskRemoteUnsupported,
+      }),
+      // Local only: this computer holds the conversation a branch copies, and its files.
+      branchTask: scopedHandler(parseBranchAgentTask, {
+        local: (parsed) => runCauseEffect(service.branchTask(parsed)),
         remote: taskRemoteUnsupported,
       }),
       stopTask: scopedHandler(parseAgentTask, {

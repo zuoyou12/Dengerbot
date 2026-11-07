@@ -102,7 +102,7 @@ export function hiddenProviderAgentIds(
 
 export function legacyProviderView(value: unknown, hiddenIds: ReadonlySet<string>): TeamProtocolV1JsonValue {
   const json: TeamProtocolV1JsonValue = JSON.parse(JSON.stringify(value));
-  return project(json, hiddenIds, 1);
+  return project(json, hiddenIds, 1, false);
 }
 
 /** Removes the named agents and the providers that the protocol does not know. See `FROZEN_PROVIDERS`. */
@@ -110,42 +110,44 @@ export function hiddenAgentView(
   value: unknown,
   hiddenIds: ReadonlySet<string>,
   protocol: 4 | 5 | 6 | 7 | 8,
+  pairedDeepSeek = false,
 ): TeamProtocolV1JsonValue {
   const json: TeamProtocolV1JsonValue = JSON.parse(JSON.stringify(value));
-  return project(json, hiddenIds, protocol);
+  return project(json, hiddenIds, protocol, pairedDeepSeek);
 }
 
 function project(
   value: TeamProtocolV1JsonValue,
   hiddenIds: ReadonlySet<string>,
   protocol: number,
+  pairedDeepSeek: boolean,
   key = "",
   listKey = "",
 ): TeamProtocolV1JsonValue {
   if (Array.isArray(value)) {
     return value.flatMap((item) => {
       if ((key === "agentOrder" || key === "agentIds") && typeof item === "string" && hiddenIds.has(item)) return [];
-      const visible = project(item, hiddenIds, protocol, "", key);
+      const visible = project(item, hiddenIds, protocol, pairedDeepSeek, "", key);
       return visible === null && item !== null ? [] : [visible];
     });
   }
   if (value === null || typeof value !== "object") return value;
   if (
-    isPeerHiddenProvider(value.provider, protocol) ||
+    isPeerHiddenProvider(value.provider, protocol, pairedDeepSeek) ||
     isPeerHiddenId(value, protocol, listKey) ||
     (typeof value.id === "string" && hiddenIds.has(value.id)) ||
     // Sender and reaction identities contain no provider-specific fields and remain valid for old peers.
     (value.kind !== "agent" && typeof value.agentId === "string" && hiddenIds.has(value.agentId))
   )
     return null;
-  if (key === "auth" && isPeerHiddenProvider(value.kind, protocol)) return { kind: "unknown" };
+  if (key === "auth" && isPeerHiddenProvider(value.kind, protocol, pairedDeepSeek)) return { kind: "unknown" };
   // An agent status names the version and the message of the provider that its `auth` names.
   const hiddenStatusProvider =
     "cliVersion" in value &&
     typeof value.auth === "object" &&
     value.auth !== null &&
     !Array.isArray(value.auth) &&
-    isPeerHiddenProvider(value.auth.kind, protocol);
+    isPeerHiddenProvider(value.auth.kind, protocol, pairedDeepSeek);
   const result: TeamProtocolV1JsonObject = {};
   for (const [field, child] of Object.entries(value)) {
     if ((key === "agentAssignments" || key === "agents") && hiddenIds.has(field)) continue;
@@ -158,7 +160,7 @@ function project(
     const visible =
       (field === "typingAgentId" || field === "leadAgentId") && typeof child === "string" && hiddenIds.has(child)
         ? null
-        : project(child, hiddenIds, protocol, field);
+        : project(child, hiddenIds, protocol, pairedDeepSeek, field);
     if (visible === null && child !== null && ["snapshot", "page", "approval", "request"].includes(field)) return null;
     result[field] = visible;
   }

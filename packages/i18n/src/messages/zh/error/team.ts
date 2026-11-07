@@ -19,6 +19,8 @@ export const messages = {
   "error.team.permanentInviteLimit": "一台主机最多可有 {limit} 个永久邀请链接。",
   "error.team.activeInviteLimit": "一台主机最多可有 {limit} 个有效邀请。",
   "error.team.inviteInvalid": "邀请无效或已过期。",
+  "error.team.agentFoldersUnsupported": "当前连接不支持助手的文件夹。",
+  "error.team.folderUnavailable": "此文件夹在主机电脑上不可用。",
   "error.team.inviteEmailMismatch": "该邀请属于另一个邮箱地址。",
   "error.team.memberDisabled": "该团队成员已被禁用。",
   "error.team.memberLimit": "一台主机最多可有 {limit} 名成员。",

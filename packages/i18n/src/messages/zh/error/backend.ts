@@ -170,6 +170,7 @@ export const messages = {
   "error.backend.agentWaitNoRoutine":
     "只有你自己的自动化任务运行才能唤醒等待，而你还没有自动化任务。请先用 openbot.create_routine 创建一个，再开启等待。",
   "error.backend.agentWaitRemoteUnsupported": "未关闭的等待仅适用于本电脑上的助手。",
+  "error.backend.markUnreadRemoteUnsupported": "仅本电脑上的助手可以将消息标为未读。",
   "error.backend.routineFlowHandoffFailed": "自动化任务无法把工作交给该助手。",
   "error.backend.mcpServerLimit": "Dengerbot 最多保留 {limit} 个 MCP 服务器。",
   "error.backend.mcpServerNameTaken": "名为 {name} 的 MCP 服务器已存在。",
@@ -299,4 +300,13 @@ export const messages = {
   "error.backend.taskOpenLimitReached": "该助手有 {count} 个未关闭的任务。请关闭一个任务，再启动或打开其他任务。",
   "error.backend.taskRemoteUnsupported": "任务仅适用于本电脑上的助手。",
   "error.backend.taskStartFailed": "Dengerbot 无法启动该任务，请改为在本轮对话中完成。",
+  // Branches: a copy of a conversation of this agent, up to one finished turn. Local only.
+  "error.backend.branchSourceBusy": "对话正在运行，请等本轮结束后再分支。",
+  "error.backend.branchMessageNotFound": "该消息不能用于分支，请从一条完成的回答开始分支。",
+  // Isolated task worktrees: a git checkout of the agent's workspace for one task. Local only.
+  "error.backend.taskWorktreeUnavailable": "当前版本无法创建任务工作树，请在不隔离的情况下启动任务。",
+  "error.backend.taskWorktreeNotRepository": "该助手的工作区不是 git 仓库，请在不隔离的情况下启动任务。",
+  "error.backend.taskWorktreeBranchTaken": "该助手的任务分支下已有检出，请先移除或复用，再重新启动。",
+  "error.backend.taskWorktreeGitFailed": "Dengerbot 无法创建 git 工作树，请在不隔离的情况下启动任务。",
+  "error.backend.taskWorktreeRemoteUnsupported": "隔离工作树仅适用于本电脑上的助手。",
 } as const satisfies PartialTranslation<typeof source>;

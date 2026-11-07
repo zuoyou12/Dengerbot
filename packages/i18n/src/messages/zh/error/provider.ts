@@ -263,6 +263,12 @@ export const messages = {
   "error.provider.customAgentCheckStopped": "助手在响应之前就停止了。",
   "error.provider.customAgentProtocolVersion": "该助手使用 ACP 版本 {version}，而 Dengerbot 使用版本 1。",
   "error.provider.customAgentCheckFailed": "该助手未以 ACP 助手的方式响应。",
+  "error.provider.customAgentWorkspaceOnly": "{reason}。“仅工作区”阻止了此操作。请尝试“完全访问”。",
+  "error.provider.customAgentsUnavailable": "该服务器无法修改其自定义助手。请在其上更新 Dengerbot。",
+  "error.provider.acpUnresponsive": "{provider} 未及时响应，Dengerbot 已结束其进程。",
+  "error.provider.acpSignInLost": "{provider} 的登录已失效，Dengerbot 已结束其进程。请重新发送消息。",
+  "error.provider.acpMcpNotLoaded":
+    "{provider} 没有加载 Dengerbot 的工具，因此此智能体无法使用这些工具，也无法联系队友。{provider} 的团队策略可能会阻止本地 MCP 服务器。请让团队管理员允许它们，然后重试。",
   "error.provider.customAgentRemoveBusy": "请等待当前对话与队列结束，再移除该自定义助手。",
   "error.provider.customAgentNone": "尚未保存任何自定义助手。",
   "error.provider.customAgentMissing": "该自定义助手当前未保存。请改用其他模型。",

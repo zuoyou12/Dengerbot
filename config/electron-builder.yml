@@ -122,6 +122,11 @@ mac:
       to: remote-desktop-runtime
     - from: build/cua-driver/darwin/${arch}
       to: cua-driver/darwin/${arch}
+    # The Node launcher DSH runs with (staged by `install:node-runtime`, preferred by
+    # `resolveDshCli`). The DSH tree itself is copied by the `build/afterPack.cjs` hook: an
+    # extraResources copy always drops a nested `node_modules`, which is where DSH lives.
+    - from: build/node-runtime/darwin/${arch}
+      to: node
   # The Computer Use driver arrives signed by Cua AI with the hardened runtime, a secure timestamp
   # and `com.apple.security.automation.apple-events`. Re-signing it with OpenBot's inherited
   # entitlements would drop that entitlement and break the driver's Automation route, so its own
@@ -200,6 +205,11 @@ linux:
       to: remote-desktop-runtime
     - from: build/cua-driver/linux/${arch}
       to: cua-driver/linux/${arch}
+    # The Node launcher DSH runs with (staged by `install:node-runtime`, preferred by
+    # `resolveDshCli`). The DSH tree itself is copied by the `build/afterPack.cjs` hook: an
+    # extraResources copy always drops a nested `node_modules`, which is where DSH lives.
+    - from: build/node-runtime/linux/${arch}
+      to: node
   # Electron takes its Linux app id from `desktopName` in package.json, and the window manager
   # matches a running window to the launcher through `StartupWMClass`. Syncing the two from one
   # value is what makes the taskbar icon group with the window it belongs to.

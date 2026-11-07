@@ -342,6 +342,8 @@ export async function listMobileAccountSessions(
   session: MobileSession,
   signal?: AbortSignal,
 ): Promise<MobileAccountSession[]> {
+  // A paired phone keeps no account sessions: the desktop that signed it in lists the devices.
+  if (session.host) throw new Error(currentText().t("mobile.settings.sessions.pairedNote"));
   return withMobileAuthRequestTimeout(async (signal) => {
     const response = await fetch(new URL("/v1/mobile-auth/devices?includeDesktop=true", session.apiUrl).toString(), {
       headers: { Authorization: `Bearer ${session.sessionToken}` },
@@ -354,6 +356,8 @@ export async function listMobileAccountSessions(
 }
 
 export async function revokeMobileAccountSession(session: MobileSession, target: MobileAccountSession): Promise<void> {
+  // A paired phone revokes nothing: the desktop that signed it in owns the device list.
+  if (session.host) throw new Error(currentText().t("mobile.settings.sessions.pairedNote"));
   if (target.current) throw new Error(currentText().t("mobile.auth.error.useSignOut"));
   if (target.kind === "desktop") throw new Error(currentText().t("mobile.auth.error.desktopSession"));
   await withMobileAuthRequestTimeout(async (signal) => {
@@ -385,6 +389,9 @@ export function updateMobileProfile(
   change: MobileProfileChange,
   onUpdated?: (updated: MobileSession) => void,
 ): Promise<MobileSession> {
+  // A paired identity lives on the desktop that signed the phone in, so this phone cannot write it.
+  // The request is refused before any HTTP: the account service holds no profile of a host pairing.
+  if (session.host) return Promise.reject(new Error(currentText().t("mobile.settings.profile.pairedIdentity")));
   return serializeMobileProfile(async () => {
     const updated =
       "analyticsEnabled" in change

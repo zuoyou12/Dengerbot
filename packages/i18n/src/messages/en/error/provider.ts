@@ -293,6 +293,13 @@ export const messages = defineMessages("error.provider", {
   "error.provider.customAgentCheckStopped": "The agent stopped before it answered.",
   "error.provider.customAgentProtocolVersion": "The agent uses ACP version {version}. Dengerbot uses version 1.",
   "error.provider.customAgentCheckFailed": "The agent did not answer as an ACP agent.",
+  "error.provider.customAgentWorkspaceOnly": "{reason}. Workspace only blocks this. Try Full access.",
+  "error.provider.customAgentsUnavailable": "This server cannot change its custom agents. Update Dengerbot on it.",
+  "error.provider.acpUnresponsive": "{provider} did not answer in time, so Dengerbot ended its process.",
+  "error.provider.acpSignInLost":
+    "{provider} lost its sign-in, so Dengerbot ended its process. Send your message again.",
+  "error.provider.acpMcpNotLoaded":
+    "{provider} did not load Dengerbot's tools, so this agent cannot use them or reach its teammates. A {provider} team policy can block local MCP servers. Ask your team admin to allow them, then try again.",
   "error.provider.customAgentRemoveBusy":
     "Wait for the active turn and queue to finish before you remove this custom agent.",
   "error.provider.customAgentNone": "No custom agent is saved.",

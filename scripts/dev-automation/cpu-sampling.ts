@@ -115,9 +115,17 @@ export function classifyChromiumProcess(command: string): ChromiumProcessType {
 }
 
 function isElectronExecutable(command: string): boolean {
-  const executable = command.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  // A Windows command line names its executable with a backslash path, an .exe
+  // suffix and often quotes; strip the quotes, or the endsWith forms below
+  // never match.
+  const executable = command.trim().split(/\s+/)[0]?.toLowerCase().replace(/"/g, "") ?? "";
   if (BUNDLE_EXECUTABLE.test(executable)) return true;
-  return executable.endsWith("/electron") || executable === "electron";
+  return (
+    executable.endsWith("/electron") ||
+    executable === "electron" ||
+    executable.endsWith("/electron.exe") ||
+    executable.endsWith("\\electron.exe")
+  );
 }
 
 const PROCESS_TABLE_ROW = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/;

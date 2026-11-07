@@ -82,6 +82,21 @@ export function AccountSessionsScreen() {
       void refetch({ cancelRefetch: false });
     }, [refetch]),
   );
+  // A paired phone reaches this screen only through a deep link, and it keeps no account sessions:
+  // the desktop that signed it in lists the devices. The note is the whole screen for it.
+  if (session?.host) {
+    return (
+      <SettingsContent>
+        <SettingsSection>
+          <SettingsRow>
+            <Typography.Paragraph selectable className="text-grouped-secondary">
+              {t("mobile.settings.sessions.pairedNote")}
+            </Typography.Paragraph>
+          </SettingsRow>
+        </SettingsSection>
+      </SettingsContent>
+    );
+  }
   return (
     <SettingsContent>
       <SettingsSection title={t("mobile.settings.sessions.title")}>

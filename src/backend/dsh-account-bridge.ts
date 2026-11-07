@@ -55,11 +55,15 @@ let lastSignature = null;
 let lastWriteAt = 0;
 // One writer at a time: a slow platform call must not let an older snapshot overwrite a newer one.
 let writeSequence = 0;
+// Set when the plugin is disposed: an identity read that was already on its way must not land after
+// the stop, or a late write would report an account the harness no longer runs.
+let disposed = false;
 
 async function rewrite(account, force) {
   const sequence = ++writeSequence;
   try {
     const view = await account.getState();
+    if (disposed || sequence !== writeSequence) return;
     const signedIn = view?.status === "credential-stored";
     let name = null;
     let avatarUrl = null;
@@ -67,11 +71,13 @@ async function rewrite(account, force) {
     let balance = null;
     if (signedIn) {
       const profile = await account.getProfile(client()).catch(() => null);
+      const wallets = await account.getBalance(client()).catch(() => null);
+      // Each await is a place where a newer poll or a dispose can pass this one: check again.
+      if (disposed || sequence !== writeSequence) return;
       if (profile?.status === "ready") {
         name = profile.value?.name ?? null;
         avatarUrl = profile.value?.avatarUrl ?? null;
       }
-      const wallets = await account.getBalance(client()).catch(() => null);
       const wallet = wallets?.status === "ready" ? (wallets.value?.[0] ?? null) : null;
       if (wallet) {
         currency = wallet.currency ?? null;
@@ -98,6 +104,7 @@ export function apply(ctx, account) {
   let polling = null;
   let fallback = null;
   const stop = () => {
+    disposed = true;
     if (polling) clearInterval(polling);
     if (fallback) clearInterval(fallback);
     polling = null;

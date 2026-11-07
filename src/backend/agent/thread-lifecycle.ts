@@ -58,7 +58,13 @@ import { isProviderTimeout } from "./provider-status";
 import { sessionSettingsIdentity } from "./session-settings";
 import { isMissingProviderSessionError, providerLabel } from "./thread-items";
 import { VISIBLE_DYNAMIC_TOOLS } from "./tool-catalog";
-import { codexSandboxConfig, codexSandboxMode, workspaceWritableRoots } from "./workspace-sandbox";
+import {
+  checkAgentFolders,
+  codexSandboxConfig,
+  codexSandboxMode,
+  sandboxWritableRoots,
+  workspaceExcludedFolders,
+} from "./workspace-sandbox";
 
 const logger = createOpenBotLogger("thread-lifecycle");
 
@@ -124,6 +130,11 @@ export interface ThreadLifecycleOptions {
   sectionTeammates?: (agentId: string) => SectionTeammates | null;
   /** Whether a public thread is a channel member's thread. */
   channelThread?: (threadId: string) => boolean;
+  /**
+   * The git worktree a public thread's task runs in, read at each start and resume of a session.
+   * The worktree is the spawn folder, and it takes the workspace's place as the first writable root.
+   */
+  worktreePath?: (threadId: string) => string | null;
 }
 
 /**
@@ -153,6 +164,7 @@ export class ThreadLifecycle {
   readonly #serverHost: boolean;
   readonly #sectionTeammates: (agentId: string) => SectionTeammates | null;
   readonly #channelThread: (threadId: string) => boolean;
+  readonly #worktreePath: (threadId: string) => string | null;
   readonly #pendingHandoffs = new Map<string, string>();
   readonly #pendingRuntimeRefreshes = new Set<string>();
   /**
@@ -183,6 +195,7 @@ export class ThreadLifecycle {
     this.#serverHost = options.serverHost ?? false;
     this.#sectionTeammates = options.sectionTeammates ?? (() => null);
     this.#channelThread = options.channelThread ?? (() => false);
+    this.#worktreePath = options.worktreePath ?? (() => null);
   }
 
   /**
@@ -491,6 +504,7 @@ export class ThreadLifecycle {
     publicThreadId: string,
   ) {
     const agent = this.#sessionAgent(owner, publicThreadId);
+    yield* checkAgentFolders(agent);
     // One reading of the MCP set for the request. Read twice, a change
     // that lands while the provider answers would be recorded as what this session was given.
     const mcpServers = this.#agentMcpServers(agent);
@@ -504,13 +518,15 @@ export class ThreadLifecycle {
     const environment = this.#agentEnvironment();
     // The same single reading, so the instructions record the section-mates they name.
     const section = this.#sectionTeammates(agent.id);
-    const config = yield* this.codexConfigEffect(agent, client, mcpServers, own, toolRuntimes, environment);
+    // One reading of the worktree row: the request and the configuration it carries must agree.
+    const worktree = this.#worktreePath(publicThreadId);
+    const config = yield* this.codexConfigEffect(agent, client, mcpServers, own, toolRuntimes, environment, worktree);
     const params: DynamicRecord = {
       ...config,
       model: agent.model,
       effort: agent.reasoningEffort,
-      cwd: agent.workspacePath,
-      runtimeWorkspaceRoots: workspaceWritableRoots(agent, this.#store.sharedRoot),
+      cwd: worktree ?? agent.workspacePath,
+      runtimeWorkspaceRoots: sandboxWritableRoots(worktree, agent, this.#store.sharedRoot),
       approvalPolicy: "on-request",
       sandbox: codexSandboxMode(agent),
       ...this.#workspaceOnlyParam(agent, client),
@@ -681,6 +697,7 @@ export class ThreadLifecycle {
     own: CodexOwnServers,
     toolRuntimes: McpToolRuntimes,
     environment: Readonly<Record<string, string>>,
+    worktreeRoot?: string | null,
   ): Effect.fn.Return<
     {
       config?: {
@@ -706,7 +723,7 @@ export class ThreadLifecycle {
           ...CODEX_DIRECT_ONLY_NAMESPACES,
           ...codexMcpNamespaces(servers),
         ],
-        ...codexSandboxConfig(agent, this.#store.sharedRoot),
+        ...codexSandboxConfig(agent, this.#store.sharedRoot, worktreeRoot),
         ...Object.fromEntries(
           Object.entries(environment).map(([name, value]) => [`shell_environment_policy.set.${name}`, value]),
         ),
@@ -784,11 +801,14 @@ export class ThreadLifecycle {
    * A `tool-sandbox` provider applies its own Workspace only sandbox, so it is told directly.
    * Codex reads `sandbox`, and `ProviderRuntime` confines a `confined-process` provider.
    */
-  #workspaceOnlyParam(agent: AgentSummary, client: AgentClient): { workspaceOnly?: true } {
-    return agentProviderDescriptor(client.provider).workspaceEnforcement === "tool-sandbox" &&
-      workspaceAccessEnforced(agent)
-      ? { workspaceOnly: true }
-      : {};
+  #workspaceOnlyParam(agent: AgentSummary, client: AgentClient): { workspaceOnly?: true; excludedFolders?: string[] } {
+    if (
+      agentProviderDescriptor(client.provider).workspaceEnforcement !== "tool-sandbox" ||
+      !workspaceAccessEnforced(agent)
+    )
+      return {};
+    const excluded = workspaceExcludedFolders(agent);
+    return { workspaceOnly: true, ...(excluded.length ? { excludedFolders: excluded } : {}) };
   }
 
   /** A client that does not run Computer Use is told to leave it out. */
@@ -865,14 +885,16 @@ export class ThreadLifecycle {
     const publicThreadId = this.#conversation.publicThreadId(owner.id, externalThreadId);
     const computerUseInOwnChat = this.#computerUseInOwnChat(owner, publicThreadId);
     const agent = this.#sessionAgent(owner, publicThreadId);
+    yield* checkAgentFolders(agent);
     const configs = this.#agentMcpServers(agent);
     const toolRuntimes = this.#toolRuntimes();
+    const worktree = this.#worktreePath(publicThreadId);
     return {
       threadId: externalThreadId,
       model: agent.model,
       effort: agent.reasoningEffort,
-      cwd: agent.workspacePath,
-      runtimeWorkspaceRoots: workspaceWritableRoots(agent, this.#store.sharedRoot),
+      cwd: worktree ?? agent.workspacePath,
+      runtimeWorkspaceRoots: sandboxWritableRoots(worktree, agent, this.#store.sharedRoot),
       approvalPolicy: "on-request",
       sandbox: codexSandboxMode(agent),
       ...this.#workspaceOnlyParam(agent, client),
@@ -892,6 +914,7 @@ export class ThreadLifecycle {
         yield* this.codexOwnServersEffect(client, configs, toolRuntimes),
         toolRuntimes,
         this.#agentEnvironment(),
+        worktree,
       )),
     };
   }).bind(this);

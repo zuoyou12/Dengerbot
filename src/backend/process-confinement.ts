@@ -3,6 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { sourceText } from "@openbot/i18n/source";
 import { workspaceTemporaryPaths } from "./agent/workspace-sandbox";
+import { isPathInside } from "./path-containment";
 
 /**
  * The folders one Workspace only agent may write: its workspace and the shared folder. The temporary
@@ -16,6 +17,8 @@ import { workspaceTemporaryPaths } from "./agent/workspace-sandbox";
  */
 export interface ProcessConfinement {
   readonly writableRoots: readonly string[];
+  /** Folders in the writable roots that the user excluded. They are denied like the protected paths. */
+  readonly excludedFolders?: readonly string[];
 }
 
 /** What a provider must write to run, and what in there it must not write. */
@@ -77,6 +80,15 @@ export function piAgentDirectory(env: NodeJS.ProcessEnv = process.env, home = ho
 export function piStatePaths(env: NodeJS.ProcessEnv = process.env, home = homedir()): ProviderStatePaths {
   return { writable: [join(piAgentDirectory(env, home), "sessions")], protected: [] };
 }
+
+/**
+ * A custom agent keeps its state where it wants, and OpenBot cannot know where. A Workspace only
+ * custom agent gets no state folder: an agent that must write in its home folder to run needs Full
+ * access.
+ */
+export function customAgentStatePaths(): ProviderStatePaths {
+  return { writable: [], protected: [] };
+}
 /** The environment of a confined OpenCode process: its own cache, apart from the one outside. */
 export const OPENCODE_CONFINED_ENV: Readonly<Record<string, string>> = { XDG_CACHE_HOME: OPENCODE_CONFINED_CACHE };
 
@@ -121,8 +133,10 @@ export function confineSpawnTarget(
   platform: NodeJS.Platform = process.platform,
 ): SpawnTarget {
   const writable = [...confinement.writableRoots, ...state.writable, ...workspaceTemporaryPaths(platform)];
+  const excluded = confinement.excludedFolders ?? [];
   const protectedPaths = [
     ...state.protected,
+    ...excluded,
     ...confinement.writableRoots.flatMap((root) => PROJECT_SETTINGS.map((name) => join(root, name))),
   ];
   if (platform === "darwin") {
@@ -131,7 +145,7 @@ export function confineSpawnTarget(
       command: SANDBOX_EXEC,
       args: [
         "-p",
-        seatbeltProfile(writable, protectedPaths, state.protectedInProjects, state.writableContents ?? []),
+        seatbeltProfile(writable, protectedPaths, state.protectedInProjects, state.writableContents ?? [], excluded),
         target.command,
         ...target.args,
       ],
@@ -150,16 +164,22 @@ function unavailable(tool: string): string {
 /**
  * Writes are denied, then allowed in the writable folders, then denied again in the protected paths:
  * in a Seatbelt profile the last rule that matches wins. `file-write-data` allows writes in an
- * existing file, not its removal, a rename or a link in its place. Everything else stays open, as
- * the Access setting says: reads, the network and process starts.
+ * existing file, not its removal, a rename or a link in its place. A folder that holds an excluded
+ * folder cannot be removed or renamed, because the excluded folder would move with it out of its
+ * rule. Everything else stays open, as the Access setting says: reads, the network and process starts.
  */
 function seatbeltProfile(
   writable: readonly string[],
   protectedPaths: readonly string[],
   inProjects: ProviderStatePaths["protectedInProjects"],
   contents: readonly string[],
+  excluded: readonly string[],
 ): string {
-  const allowed = unique(writable.flatMap(realPaths)).map((path) => `(subpath ${sbplString(path)})`);
+  const writableReal = unique(writable.flatMap(realPaths));
+  const allowed = writableReal.map((path) => `(subpath ${sbplString(path)})`);
+  const holders = unique(
+    excluded.flatMap(realPaths).flatMap((folder) => writableReal.flatMap((root) => holderFolders(root, folder))),
+  ).map((path) => `(literal ${sbplString(path)})`);
   const files = unique(contents.flatMap(realPaths)).map((path) => `(literal ${sbplString(path)})`);
   const names = inProjects?.names.map(regexText).join("|");
   const denied = [
@@ -180,8 +200,21 @@ function seatbeltProfile(
     ...(files.length > 0 ? [`(allow file-write-data ${files.join(" ")})`] : []),
     '(allow file-write* (literal "/dev/null") (literal "/dev/zero") (literal "/dev/tty") (literal "/dev/ptmx") (literal "/dev/dtracehelper") (regex #"^/dev/ttys[0-9]+$") (regex #"^/dev/fd/"))',
     ...(denied.length > 0 ? [`(deny file-write* ${denied.join(" ")})`] : []),
+    ...(holders.length > 0 ? [`(deny file-write-unlink ${holders.join(" ")})`] : []),
     "",
   ].join("\n");
+}
+
+/** `root` and each folder below it that holds `folder`, or none when `folder` is not inside `root`. */
+function holderFolders(root: string, folder: string): string[] {
+  const holders: string[] = [];
+  let parent = dirname(folder);
+  while (parent !== folder && isPathInside(root, parent)) {
+    holders.push(parent);
+    folder = parent;
+    parent = dirname(parent);
+  }
+  return holders;
 }
 
 /**

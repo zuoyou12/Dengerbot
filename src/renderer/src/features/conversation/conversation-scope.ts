@@ -746,6 +746,15 @@ export function createConversationViewScope(props: ConversationProps) {
     setComposerFocusRequest,
   });
   const { replyToMessage, addPageText, setPageContext, reactToMessage, copyMessage, removeAttachment } = messageActions;
+  /**
+   * Copies the agent's own chat through an answer into a new thread, and opens it. The thread tab
+   * opens at once, so the user can type the new direction in the branch's message box.
+   */
+  const branchThread = async (sourceTaskId: string | null, messageId: string): Promise<boolean> => {
+    const onBranch = props.threads?.onBranch;
+    if (!onBranch) return false;
+    return onBranch(sourceTaskId, messageId);
+  };
   const settings = createSettingsStore({
     props,
     runtimeSettingsAttempts: resources.runtimeSettingsAttempts,
@@ -1709,6 +1718,7 @@ export function createConversationViewScope(props: ConversationProps) {
     composerHasContent,
     copiedMessageId,
     copyMessage,
+    branchThread,
     pasteFiles,
     releaseCutAttachments,
     clearSubmittedDraft,

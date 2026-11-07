@@ -19,7 +19,7 @@ import { isOneOf, isString } from "./runtime-values";
  * the per-provider argv, palette tokens and runtime-lock schemas, which belong to the driver, the
  * stylesheet and the lock file.
  */
-export const AGENT_PROVIDERS = ["deepseek", "claude", "codex"] as const;
+export const AGENT_PROVIDERS = ["deepseek", "claude", "codex", "acp"] as const;
 export type AgentProviderId = (typeof AGENT_PROVIDERS)[number];
 
 export function isAgentProvider(value: unknown): value is AgentProviderId {
@@ -231,6 +231,29 @@ const AGENT_PROVIDER_DESCRIPTOR_TABLE = {
     reportsUsage: false,
     approvalsInFullAccess: true,
   },
+  // One provider for every Agent Client Protocol agent the user adds by command. The model id names
+  // the agent (`<customAgentId>/<agentModel>`), so one provider row serves them all.
+  acp: {
+    id: "acp",
+    displayName: "Custom agent",
+    cliName: "ACP agent",
+    onboardingDescription: "An agent you run by command",
+    signInMessage: "Sign in with the agent's own command, then try again.",
+    installGuideLink: null,
+    defaultModel: "",
+    legacyModelPrefix: null,
+    authKind: "acp",
+    pickerOrder: 7,
+    localCodeSignIn: null,
+    signInPageEnd: "callback",
+    skillFolders: [".agents/skills"],
+    homeSkills: "instructions",
+    workspaceEnforcement: "confined-process",
+    steer: "deferred",
+    concurrentTurns: false,
+    reportsUsage: false,
+    approvalsInFullAccess: true,
+  },
 } as const satisfies Record<AgentProviderId, AgentProviderDescriptor>;
 
 export const AGENT_PROVIDER_DESCRIPTORS: readonly AgentProviderDescriptor[] = AGENT_PROVIDERS.map(
@@ -252,10 +275,12 @@ export function agentProviderCliName(provider: AgentProviderId): string {
 }
 
 /**
- * Picker and onboarding order, which is not `AGENT_PROVIDERS` order. This build ships no custom
- * agent provider (`acp`), so every row is offered.
+ * Picker and onboarding order, which is not `AGENT_PROVIDERS` order. `acp` is not in it: a custom
+ * agent is the user's own command, listed in the picker's Custom tab and never offered as a default.
  */
-export const PICKER_PROVIDERS: readonly AgentProviderId[] = AGENT_PROVIDER_DESCRIPTORS.slice()
+export const PICKER_PROVIDERS: readonly AgentProviderId[] = AGENT_PROVIDER_DESCRIPTORS.filter(
+  (descriptor) => descriptor.id !== "acp",
+)
   .sort((left, right) => left.pickerOrder - right.pickerOrder)
   .map((descriptor) => descriptor.id);
 

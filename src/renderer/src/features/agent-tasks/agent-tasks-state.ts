@@ -173,9 +173,19 @@ export function createAgentTasks(options: AgentTasksOptions) {
     }
   }
 
-  async function startTask(agentId: string, text: string): Promise<AgentTask | null> {
+  async function startTask(
+    agentId: string,
+    text: string,
+    options: { isolatedWorktree?: boolean } = {},
+  ): Promise<AgentTask | null> {
     const task = await runAction(
-      () => port().startTask({ agentId, text, clientMessageId: crypto.randomUUID() }),
+      () =>
+        port().startTask({
+          agentId,
+          text,
+          ...(options.isolatedWorktree ? { isolatedWorktree: true } : {}),
+          clientMessageId: crypto.randomUUID(),
+        }),
       "conversation.threads.error.start",
     );
     if (task && scopeIsCurrent()) rememberTask(task);
@@ -186,6 +196,29 @@ export function createAgentTasks(options: AgentTasksOptions) {
     const run = port().runQueuedMessageAsTask;
     if (!run) return null;
     const task = await runAction(() => run({ agentId, deliveryId }), "conversation.threads.error.start");
+    if (task && scopeIsCurrent()) rememberTask(task);
+    return task;
+  }
+
+  /** Whether this computer copies a conversation into a new thread. A branch is a local action. */
+  const canBranch = (): boolean => local() && port().branchTask !== undefined;
+
+  /**
+   * Copies a conversation through an agent answer into a new thread: the agent's own chat when
+   * `sourceTaskId` is null, or a side thread. Each click carries a new request id, so the host
+   * makes a new branch; the id only merges a lost request that the app sends again.
+   */
+  async function branchTask(
+    agentId: string,
+    sourceTaskId: string | null,
+    messageId: string,
+  ): Promise<AgentTask | null> {
+    const branch = port().branchTask;
+    if (!branch || !local()) return null;
+    const task = await runAction(
+      () => branch({ agentId, taskId: sourceTaskId, messageId, requestId: crypto.randomUUID() }),
+      "conversation.threads.error.branch",
+    );
     if (task && scopeIsCurrent()) rememberTask(task);
     return task;
   }
@@ -274,6 +307,8 @@ export function createAgentTasks(options: AgentTasksOptions) {
     openTask,
     startTask,
     runQueuedMessageAsTask,
+    canBranch,
+    branchTask,
     sendToTask,
     stopTask,
     closeTask,

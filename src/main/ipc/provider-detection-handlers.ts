@@ -21,6 +21,7 @@ export function providerDetectionIpcHandlers({
   return {
     providerDetection: {
       scanModelServers: handler(() => Effect.runPromise(detection.scanModelServers())),
+      scanAgents: handler(() => Effect.runPromise(detection.scanAgents())),
       discoverModels: payloadHandler(parseDiscoverModels, (input) =>
         Effect.runPromise(detection.discoverModels(input)),
       ),

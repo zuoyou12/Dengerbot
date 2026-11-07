@@ -428,11 +428,79 @@
   line-height: var(--openbot-leading-sm);
 }
 
+/* The line after the messages that a branch copied: "Branched from" and the source, between two rules. */
+.agent-thread-branch-divider {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--openbot-space-2);
+  margin: var(--openbot-space-2) 0;
+  color: var(--openbot-text-muted);
+  font-size: var(--openbot-text-sm);
+  line-height: var(--openbot-leading-sm);
+}
+
+.agent-thread-branch-divider hr {
+  height: 1px;
+  flex: 1;
+  border: 0;
+  background: var(--openbot-border);
+}
+
+.agent-thread-branch-text,
+.agent-thread-branch-divider .agent-thread-branch-link {
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: var(--openbot-space-1);
+  color: inherit;
+  font-size: inherit;
+}
+
+.agent-thread-branch-text svg,
+.agent-thread-branch-link svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.agent-thread-branch-text span,
+.agent-thread-branch-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .agent-thread-queued {
   display: flex;
   flex-direction: column;
   gap: var(--openbot-space-1);
   padding-top: var(--openbot-chat-entry-gap);
+}
+
+/* The isolation wish of a new thread: its own checkout of the workspace, beside the message box. */
+.agent-thread-worktree {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--openbot-space-2);
+  margin: 0;
+  padding: var(--openbot-space-2) var(--openbot-space-3);
+  color: var(--openbot-text-secondary);
+  font-size: var(--openbot-text-sm);
+  line-height: var(--openbot-leading-sm);
+  cursor: pointer;
+}
+
+.agent-thread-worktree-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--openbot-space-1);
+}
+
+.agent-thread-worktree-hint {
+  color: var(--openbot-text-muted);
 }
 
 .agent-thread-queued-text {

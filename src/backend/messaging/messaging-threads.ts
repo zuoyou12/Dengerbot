@@ -16,6 +16,7 @@ import { causeHelpers } from "../effect-boundary";
 import type { DeliveryContext, MailboxStore, MessagingOrigin } from "../mailbox-store";
 import type { OpenBotDatabase } from "../openbot-database";
 import { MessagingMemoryStore } from "./messaging-memory-store";
+import { MessagingOutboxStore } from "./messaging-outbox-store";
 import { type MessagingContextMessage, messagingPromptText } from "./messaging-prompt";
 import type { MessagingOperationFailed } from "./messaging-service";
 import { type MessagingLink, MessagingStore } from "./messaging-store";
@@ -105,7 +106,9 @@ export interface MessagingOutbound {
     connectionId: string,
     target: MessageTarget,
     markdown: string,
-  ): Effect.Effect<{ posted: true } | { error: string; failure: Exclude<MessagingPostFailure, "gone"> }>;
+    /** The idempotency key that makes asking the same request twice record one post. */
+    idempotencyKey: string,
+  ): Effect.Effect<{ posted: true } | { queued: string } | { error: string; failure: MessagingPostFailure }>;
 }
 
 export interface MessagingThreadsHooks {
@@ -146,6 +149,8 @@ export class MessagingThreads {
   readonly store: MessagingStore;
   /** The facts of each connection, which every prompt of its conversations shows. */
   readonly memories: MessagingMemoryStore;
+  /** Every post an agent sends on its own initiative, recorded before the platform sees it. */
+  readonly outbox: MessagingOutboxStore;
   readonly #database: OpenBotDatabase;
   readonly #mailbox: MailboxStore;
   readonly #hooks: MessagingThreadsHooks;
@@ -176,6 +181,7 @@ export class MessagingThreads {
   constructor(database: OpenBotDatabase, mailbox: MailboxStore, hooks: MessagingThreadsHooks) {
     this.store = new MessagingStore(database);
     this.memories = new MessagingMemoryStore(database);
+    this.outbox = new MessagingOutboxStore(database);
     this.#database = database;
     this.#mailbox = mailbox;
     this.#hooks = hooks;
@@ -216,12 +222,14 @@ export class MessagingThreads {
 
   /**
    * One outbound tool call, from any turn of any agent. The arguments name the connection and the
-   * place; only an enabled connection of this host can take a post.
+   * place; only an enabled connection of this host can take a post. The idempotency key makes a
+   * retried tool call record one post, whatever the platform answered the first time.
    */
   readonly outboundTool = Effect.fn("MessagingThreads.outboundTool")(function* (
     this: MessagingThreads,
     tool: string,
     args: unknown,
+    idempotencyKey: string,
   ): Effect.fn.Return<OpenBotToolResponse> {
     const call = parseMessagingOutboundTool(tool, args);
     if ("error" in call) return openBotToolFailure(call.error);
@@ -250,24 +258,35 @@ export class MessagingThreads {
             record.connectionId,
             { platformChannelId: call.place, replyThreadId: call.replyTo },
             call.text,
+            idempotencyKey,
           );
+    if ("queued" in answer) return openBotToolResult({ queued: answer.queued });
     return "error" in answer ? openBotToolFailure(answer.error) : openBotToolResult(answer);
   });
 
   /**
    * A post that OpenBot sends on its own, such as a routine's answer, to the top level of one place.
-   * Only an enabled connection of this host can take it.
+   * Only an enabled connection of this host can take it. The idempotency key is the run's or the
+   * step's, so a retried delivery meets the row it recorded. A queued post reads as `not-running`,
+   * which the caller already retries; the row itself goes out either way.
    */
   readonly deliver = Effect.fn("MessagingThreads.deliver")(function* (
     this: MessagingThreads,
     connectionId: string,
     placeId: string,
     markdown: string,
+    idempotencyKey: string,
   ): Effect.fn.Return<{ posted: true } | { failure: MessagingPostFailure }> {
     if (!this.store.connection(connectionId)?.enabled) return { failure: "gone" };
     const outbound = this.#outbound;
     if (!outbound) return { failure: "not-running" };
-    const answer = yield* outbound.post(connectionId, { platformChannelId: placeId, replyThreadId: null }, markdown);
+    const answer = yield* outbound.post(
+      connectionId,
+      { platformChannelId: placeId, replyThreadId: null },
+      markdown,
+      idempotencyKey,
+    );
+    if ("queued" in answer) return { failure: "not-running" };
     return "error" in answer ? { failure: answer.failure } : answer;
   });
 

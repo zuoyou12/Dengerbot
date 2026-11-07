@@ -7,13 +7,19 @@ import { createOpenBotLogger, toLogValue } from "@openbot/logging";
 import { AGENT_MEMORY_RULES_SCHEMA_SQL } from "./agent-memory-rules";
 import { AGENT_MEMORY_SELECTION_SCHEMA_SQL, migrateAgentMemorySelection } from "./agent-memory-selection";
 import { AGENT_TASK_SCHEMA_SQL } from "./agent-tasks/agent-task-schema";
-import { AGENT_THREAD_MIGRATION_SQL, AGENT_THREAD_SCHEMA_SQL } from "./agent-threads/agent-thread-schema";
+import { TASK_WORKTREE_SCHEMA_SQL } from "./agent-tasks/task-worktree-schema";
+import {
+  AGENT_THREAD_MIGRATION_SQL,
+  AGENT_THREAD_SCHEMA_SQL,
+  V50_AGENT_THREAD_BRANCH_COLUMNS_SQL,
+} from "./agent-threads/agent-thread-schema";
 import { AGENT_WAIT_SCHEMA_SQL } from "./agent-waits/agent-wait-schema";
 import { BROWSER_PROFILE_SCHEMA_SQL } from "./browser-profiles/browser-profile-schema";
 import { CHANNEL_SCHEMA_SQL, CHANNEL_SETTINGS_SCHEMA_SQL } from "./channel-schema";
 import { PROVIDER_HISTORY_SCHEMA_SQL } from "./database/provider-history-schema";
 import { THREAD_MESSAGE_SEARCH_SCHEMA_SQL } from "./database/thread-message-search";
 import { MCP_SERVERS_SCHEMA_SQL } from "./mcp-schema";
+import { MESSAGING_OUTBOX_SCHEMA_SQL } from "./messaging/messaging-outbox-schema";
 import {
   MESSAGING_ALLOWED_ROLES_SCHEMA_SQL,
   MESSAGING_MEMORY_SCHEMA_SQL,
@@ -607,7 +613,9 @@ const LATEST_SCHEMA_SQL =
   BROWSER_PROFILE_SCHEMA_SQL +
   WORKFLOW_SCHEMA_SQL +
   AGENT_THREAD_SCHEMA_SQL +
-  THREAD_MESSAGE_SEARCH_SCHEMA_SQL;
+  THREAD_MESSAGE_SEARCH_SCHEMA_SQL +
+  MESSAGING_OUTBOX_SCHEMA_SQL +
+  TASK_WORKTREE_SCHEMA_SQL;
 
 /** The end of the thread message table with the migration 40 columns before its PRIMARY KEY constraint. */
 function withThreadMessageOrderColumns(tableEnd: string): string {
@@ -888,6 +896,25 @@ const MIGRATIONS: readonly OpenBotMigration[] = [
     // Creates one companion table only. It references a released table through a foreign key that
     // cascades with the memory row, so no rebuild, no foreign-key pause and no vacuum.
     up: (db) => db.exec(AGENT_MEMORY_RULES_SCHEMA_SQL),
+  },
+  {
+    version: 50,
+    // Adds the branch link columns to the side-thread table with no default: no rebuild, no data
+    // change and no foreign-key pause, and every existing thread gets null, which is a thread that
+    // is not a branch. Few rows, so no vacuum.
+    up: addAgentThreadBranch,
+  },
+  {
+    version: 51,
+    // Creates the messaging outbox table only. No post exists yet, so nothing is copied, and the
+    // table references nothing: no foreign-key pause and no vacuum.
+    up: (db) => db.exec(MESSAGING_OUTBOX_SCHEMA_SQL),
+  },
+  {
+    version: 52,
+    // Creates the task worktree companion table only. It carries no foreign key on purpose - the row
+    // outlives its thread - so no foreign-key pause and no vacuum.
+    up: (db) => db.exec(TASK_WORKTREE_SCHEMA_SQL),
   },
 ];
 
@@ -1684,6 +1711,18 @@ interface SnapshotEventRow {
   commandId: string;
   threadId: string;
   payload: DynamicRecord;
+}
+
+// Migration 50 links a side thread to the conversation it was branched from. A development profile
+// that ran this version before it shipped has the columns already, and a table that migration 47
+// created carries them too: both skip the columns they find.
+function addAgentThreadBranch(db: DatabaseSync): void {
+  const columns = db.prepare("PRAGMA table_info(projection_agent_threads)").all();
+  for (const column of V50_AGENT_THREAD_BRANCH_COLUMNS_SQL) {
+    const name = column.slice(0, column.indexOf(" "));
+    if (columns.some((existing) => isDynamicRecord(existing) && existing.name === name)) continue;
+    db.exec(`ALTER TABLE projection_agent_threads ADD COLUMN ${column}`);
+  }
 }
 
 function compactConversationHistory(db: DatabaseSync): void {

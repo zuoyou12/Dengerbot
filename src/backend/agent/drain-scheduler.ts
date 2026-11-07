@@ -35,7 +35,7 @@ import {
 import type { ThreadLifecycle } from "./thread-lifecycle";
 import { TurnSlots } from "./turn-slots";
 import type { UsageLimitGate } from "./usage-limit-gate";
-import { codexSandboxPolicy, workspaceWritableRoots } from "./workspace-sandbox";
+import { checkAgentFolders, codexSandboxPolicy, sandboxWritableRoots } from "./workspace-sandbox";
 
 /** Shown to the user when a message names a model of an endpoint that was taken out. */
 export const REMOVED_ENDPOINT_MESSAGE = sourceText("error.agent.endpointRemoved");
@@ -93,6 +93,8 @@ export interface TaskLanes {
   limit(agentId: string): number;
   /** Whether the agent's provider runs one turn at a time, across its own chat and its tasks. */
   oneTurnAtATime(agentId: string): boolean;
+  /** The git worktree this task runs in, or null when it runs in the agent's workspace. */
+  worktreePath(taskId: string): string | null;
 }
 
 /**
@@ -135,6 +137,8 @@ export interface DrainSchedulerOptions {
   hooks: DrainHooks;
   channels?: ChannelService;
   messaging?: MessagingThreads;
+  /** One slot past the limit for the oldest person-headed waiting lane. Desktop passes true. */
+  personExtraSlot?: boolean;
 }
 
 /**
@@ -216,6 +220,7 @@ export class DrainScheduler {
     this.#messaging = options.messaging;
     this.#slots = new TurnSlots({
       limit: () => this.#memory.turnLimit(),
+      personExtraSlot: options.personExtraSlot === true,
       lanes: () =>
         this.#store
           .list()
@@ -608,6 +613,8 @@ export class DrainScheduler {
         this.#mailboxSync.emitQueue(delivery.recipientAgentId);
       }
       const agent = yield* this.#store.getOrCreate(delivery.recipientAgentId).pipe(toDeliveryStartFailed);
+      // Once for the turn: its process, its session and its sandbox roots read the result.
+      yield* checkAgentFolders(agent);
       requestedModel = agent.model;
       // The endpoint was removed while this agent was busy, so no other model could be given to it
       // then. The old process would still answer on the removed endpoint, with the credentials it
@@ -743,6 +750,8 @@ export class DrainScheduler {
           // between, and an endpoint removed during that wait finds the process still running. The
           // retry below calls this as well, so the recovered thread is checked too.
           yield* drainStep(requireServedModel);
+          // A task with its own checkout runs the turn there, in place of the agent's workspace.
+          const worktree = taskId === null ? null : this.#tasks.worktreePath(taskId);
           return yield* this.#threads
             .requestWithArchivedThreadRecovery(
               agent,
@@ -763,10 +772,10 @@ export class DrainScheduler {
                 answerOptional:
                   delivery.sender.kind === "agent" && delivery.expectsReply === false && !delivery.replyToMessageId,
                 input: inputForThread(providerThreadId),
-                cwd: agent.workspacePath,
-                runtimeWorkspaceRoots: workspaceWritableRoots(agent, this.#store.sharedRoot),
+                cwd: worktree ?? agent.workspacePath,
+                runtimeWorkspaceRoots: sandboxWritableRoots(worktree, agent, this.#store.sharedRoot),
                 approvalPolicy: "on-request",
-                sandboxPolicy: codexSandboxPolicy(agent, this.#store.sharedRoot),
+                sandboxPolicy: codexSandboxPolicy(agent, this.#store.sharedRoot, worktree),
               },
               decodeTurnResponse,
             )

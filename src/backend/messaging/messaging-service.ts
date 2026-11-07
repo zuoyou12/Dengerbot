@@ -38,6 +38,12 @@ import type { SidebarLayoutStore } from "../sidebar-layout-store";
 import { type DiscordAppPort, DiscordConnect, type DiscordConnectFailed } from "./discord/discord-connect";
 import { discordOrchestratorMemories, discordOrchestratorProfile } from "./discord/discord-orchestrator";
 import { mentionNames, withMentionNames } from "./messaging-mentions";
+import { MESSAGING_OUTBOX_QUEUED_ANSWER, messagingOutboxDroppedAnswer } from "./messaging-outbox-answers";
+import type {
+  MessagingOutboxDropReason,
+  MessagingOutboxOutgoing,
+  MessagingOutboxStore,
+} from "./messaging-outbox-store";
 import { MessagingStatusPosts, type PendingFinal, type StatusPost, type StopButton } from "./messaging-status-posts";
 import type { MessagingConnectionRecord, MessagingLink } from "./messaging-store";
 import {
@@ -204,6 +210,8 @@ export class MessagingService {
    */
   readonly #transportDeadlines = new Map<string, number>();
   readonly #status: MessagingStatusPosts;
+  readonly #outbox: MessagingOutboxStore;
+  #outboxTimer: ReturnType<typeof setTimeout> | null = null;
   /**
    * Status posts by `linkId:platformMessageId`, until the turn that answers the message ends and its
    * last post reaches the platform. Kept by `#status`.
@@ -247,6 +255,7 @@ export class MessagingService {
     this.#telegramApp = options.ingress && options.telegramApp ? options.telegramApp : null;
     this.#sidebar = options.sidebar ?? null;
     this.#status = new MessagingStatusPosts(options.statusPath ?? null);
+    this.#outbox = options.threads.outbox;
     this.#posts = this.#status.posts;
     this.#stops = this.#status.stops;
   }
@@ -257,6 +266,9 @@ export class MessagingService {
     if (this.#started) return;
     this.#started = true;
     this.#scope = Scope.makeUnsafe();
+    // A post that was on its way when the process ended may be half-posted: it ends uncertain, and
+    // nothing sends it again. Before any connection runs, so no sweep meets a `sending` row.
+    this.#outbox.interruptSending(new Date().toISOString());
     // Before the connections start, which settle the posts they find when they are connected. It does
     // not wait: an activity that comes before the listener below is there would be lost.
     this.#status.load(new Set(this.#threads.store.connections().map((record) => record.connectionId)));
@@ -278,7 +290,7 @@ export class MessagingService {
     this.#threads.setHistorySource((link, scope, limit) => this.#recentMessages(link, scope, limit));
     this.#threads.setOutbound({
       places: (connectionId) => this.#outboundPlaces(connectionId),
-      post: (connectionId, target, markdown) => this.#outboundPost(connectionId, target, markdown),
+      post: (connectionId, target, markdown, key) => this.#outboundPost(connectionId, target, markdown, key),
     });
     this.#ingress?.handle((workspaceId, delivery) => this.deliver(workspaceId, delivery));
     const records = this.#threads.store.connections();
@@ -289,6 +301,7 @@ export class MessagingService {
       { concurrency: "unbounded", discard: true },
     );
     this.#connectionsStarted = true;
+    this.#armOutbox();
     // A connection with no credentials or a removed chat did not start: its kept deliveries wait no more.
     for (const [connectionId, waiters] of [...this.#transportWaiters]) {
       if (!this.#live.has(connectionId)) for (const ready of [...waiters]) ready();
@@ -300,6 +313,8 @@ export class MessagingService {
   ): Effect.fn.Return<void, MessagingOperationFailed> {
     this.#started = false;
     this.#connectionsStarted = false;
+    if (this.#outboxTimer) clearTimeout(this.#outboxTimer);
+    this.#outboxTimer = null;
     for (const unsubscribe of this.#unsubscribe.splice(0)) unsubscribe();
     // The kept deliveries that wait for a connection go now: nothing will start it.
     for (const waiters of [...this.#transportWaiters.values()]) for (const ready of [...waiters]) ready();
@@ -1096,13 +1111,17 @@ export class MessagingService {
   ) {
     const wasConnected = live.state === "connected";
     live.state = state;
-    if (state === "connected" && !wasConnected && this.#live.get(live.record.connectionId) === live)
+    if (state === "connected" && !wasConnected && this.#live.get(live.record.connectionId) === live) {
       this.#dispatch(this.#settleStatusPosts(live));
+      // The posts that waited for this connection go out now, not on the timer.
+      this.#dispatch(this.#serial("messaging-outbox", this.#outboxWake(live.record.connectionId)));
+    }
     if (FATAL_STATES.has(state)) {
       this.#threads.store.updateConnection(live.record.connectionId, { lastErrorCode: state });
       logger.warn("A messaging connection stopped.", { platform: live.record.platform, state });
       // The workspace uninstalled OpenBot or revoked its token, or the bot left the Telegram chat:
-      // Signal stops routing it here.
+      // Signal stops routing it here. The posts that waited for it will never go out.
+      if (state === "removed") this.#outbox.dropConnection(live.record.connectionId, new Date().toISOString());
       const unlink:
         | Effect.Effect<void, DiscordConnectFailed | SlackConnectFailed | MessagingOperationFailed>
         | undefined =
@@ -1436,26 +1455,134 @@ export class MessagingService {
     connectionId: string,
     target: MessageTarget,
     markdown: string,
+    idempotencyKey: string,
+  ) {
+    const now = new Date().toISOString();
+    // Before anything: the same request meets the row it recorded, never a second post.
+    const recorded = this.#outbox.statusOf(idempotencyKey);
+    if (recorded.recorded) {
+      if (recorded.status === "sent") return { posted: true as const };
+      if (recorded.status === "pending" || recorded.status === "sending")
+        return { queued: MESSAGING_OUTBOX_QUEUED_ANSWER };
+      if (recorded.status === "failed" || recorded.status === "uncertain") {
+        const reason = this.#outboxReason(recorded.reason);
+        return { error: messagingOutboxDroppedAnswer(reason), failure: this.#outboxFailure(reason) };
+      }
+    }
+    const live = this.#live.get(connectionId);
+    // Signal accepts every chat linked to this host, but the chat's own adapter keeps its reply chains.
+    const refused =
+      live?.record.platform === "telegram" && live.identity && target.platformChannelId !== live.identity.workspaceId
+        ? "A Telegram connection posts only in its own chat. Use the connection of that chat."
+        : null;
+    if (refused) {
+      this.#outbox.record({
+        id: idempotencyKey,
+        connectionId,
+        place: target.platformChannelId,
+        thread: target.replyThreadId,
+        markdown,
+        at: now,
+      });
+      this.#outbox.end(idempotencyKey, "failed", "refused", now);
+      return { error: refused, failure: "refused" as const };
+    }
+    // The row is on disk before the platform is asked, so a restart loses no text.
+    this.#outbox.record({
+      id: idempotencyKey,
+      connectionId,
+      place: target.platformChannelId,
+      thread: target.replyThreadId,
+      markdown,
+      at: now,
+    });
+    if (!live?.identity) return { queued: MESSAGING_OUTBOX_QUEUED_ANSWER };
+    // This post goes out now only when no earlier post of its lane still waits.
+    if (!this.#outbox.isLaneHead(idempotencyKey)) return { queued: MESSAGING_OUTBOX_QUEUED_ANSWER };
+    const row = this.#outbox.rowOf(idempotencyKey);
+    if (!row) return { queued: MESSAGING_OUTBOX_QUEUED_ANSWER };
+    return yield* this.#sendOutboxRow(row, live);
+  });
+
+  /** The reason a settled row carries, safe against a hand-edited database. */
+  #outboxReason(reason: string | null): MessagingOutboxDropReason {
+    return reason === "refused" || reason === "send-failed" || reason === "gone" || reason === "expired"
+      ? reason
+      : "restart";
+  }
+
+  /** The failure a settled row reads as, for the callers that branch on it. */
+  #outboxFailure(reason: MessagingOutboxDropReason): "refused" | "gone" | "unknown" {
+    if (reason === "refused") return "refused";
+    if (reason === "gone") return "gone";
+    return "unknown";
+  }
+
+  /** Sends one outbox row through its connection, and records what became of it. */
+  readonly #sendOutboxRow = Effect.fn("MessagingService.sendOutboxRow")(function* (
+    this: MessagingService,
+    row: MessagingOutboxOutgoing,
+    live: LiveConnection,
+  ) {
+    const now = new Date().toISOString();
+    if (!this.#outbox.claim(row.id, now)) return { queued: MESSAGING_OUTBOX_QUEUED_ANSWER };
+    // The place is outside this computer, so a secret in the text must not reach it.
+    const result = yield* live.adapter
+      .postAnswer({ platformChannelId: row.place, replyThreadId: row.thread }, redactText(row.markdown), null)
+      .pipe(
+        Effect.as({ posted: true as const }),
+        Effect.catch((failure) =>
+          Effect.succeed({
+            error: `${refusal(failure)} A long text goes in more than one post, so a part of it can be posted already. Do not post it again only because of this error.`,
+            failure: "unknown" as const,
+          }),
+        ),
+      );
+    const at = new Date().toISOString();
+    if ("posted" in result) this.#outbox.markSent(row.id, at);
+    else this.#outbox.end(row.id, "failed", "send-failed", at);
+    return result;
+  });
+
+  /** Sends what is due, then arms the timer for the next post: one sweep at a time. */
+  readonly #outboxSweep = Effect.fn("MessagingService.outboxSweep")(function* (this: MessagingService) {
+    const now = new Date().toISOString();
+    this.#outbox.expireStale(now);
+    for (const row of this.#outbox.due(now)) {
+      const live = this.#live.get(row.connectionId);
+      if (!live?.identity) continue;
+      yield* this.#sendOutboxRow(row, live);
+    }
+  });
+
+  /** A connection that has just come back sends its waiting posts at once. */
+  readonly #outboxWake = Effect.fn("MessagingService.outboxWake")(function* (
+    this: MessagingService,
+    connectionId: string,
   ) {
     const live = this.#live.get(connectionId);
-    if (!live?.identity) return { error: MESSAGING_NOT_RUNNING, failure: "not-running" as const };
-    // Signal accepts every chat linked to this host, but the chat's own adapter keeps its reply chains.
-    if (live.record.platform === "telegram" && target.platformChannelId !== live.identity.workspaceId)
-      return {
-        error: "A Telegram connection posts only in its own chat. Use the connection of that chat.",
-        failure: "refused" as const,
-      };
-    // The place is outside this computer, so a secret in the text must not reach it.
-    return yield* live.adapter.postAnswer(target, redactText(markdown), null).pipe(
-      Effect.as({ posted: true as const }),
-      Effect.catch((failure) =>
-        Effect.succeed({
-          error: `${refusal(failure)} A long text goes in more than one post, so a part of it can be posted already. Do not post it again only because of this error.`,
-          failure: "unknown" as const,
-        }),
-      ),
-    );
+    if (!live?.identity) return;
+    for (const row of this.#outbox.dueForConnection(connectionId)) {
+      yield* this.#sendOutboxRow(row, live);
+    }
   });
+
+  /**
+   * One timer for the whole outbox, armed to the earliest waiting post. Every sweep and every wake
+   * rearms it, so the time it fires at is always the current earliest one.
+   */
+  #armOutbox(): void {
+    if (this.#outboxTimer) clearTimeout(this.#outboxTimer);
+    this.#outboxTimer = null;
+    const next = this.#outbox.nextDueAt();
+    if (!next) return;
+    const delay = Math.max(0, Math.min(Date.parse(next) - Date.now(), 15 * 60_000));
+    this.#outboxTimer = setTimeout(() => {
+      this.#outboxTimer = null;
+      this.#dispatch(this.#serial("messaging-outbox", this.#outboxSweep()));
+      this.#armOutbox();
+    }, delay);
+  }
 
   readonly #activity = Effect.fn("MessagingService.activity")(function* (
     this: MessagingService,

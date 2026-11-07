@@ -7,6 +7,7 @@ import {
   type BubbleVariant,
   Button,
   ChevronRight,
+  CircleDot,
   ContextMenu,
   DropdownMenu,
   Info,
@@ -31,7 +32,7 @@ import { AttachmentCards, type AttachmentMediaSource } from "./AttachmentCards";
 import { CodeBlock } from "./CodeBlock";
 import { CodePreview } from "./CodePreview";
 import { ComparisonTable } from "./ComparisonTable";
-import { CheckIcon, CopyIcon, PlusIcon, ReactionIcon, ReplyIcon, StopIcon } from "./ConversationIcons";
+import { BranchIcon, CheckIcon, CopyIcon, PlusIcon, ReactionIcon, ReplyIcon, StopIcon } from "./ConversationIcons";
 import { createSmoothHeightResize } from "./createSmoothHeightResize";
 import { DataTable, type MessageContentBlock, messageContentBlocks, reuseUnchangedBlocks } from "./DataTable";
 import { messageFileReferences } from "./FileReference";
@@ -641,6 +642,13 @@ export function MessageActions(props: {
   onCopy: () => void;
   /** Reads the message aloud, or stops it while it is read. Absent where replies cannot be read aloud. */
   readAloud?: { reading: boolean; onToggle: () => void } | undefined;
+  /**
+   * Copies the thread through this message into a new thread. Only the last agent message of a
+   * finished turn has it.
+   */
+  onBranch?: (() => void) | undefined;
+  /** A turn runs in the thread, so Branch shows but does nothing. */
+  branchDisabled?: boolean | undefined;
 }) {
   const { t } = useText();
   const authorName = () => props.authorName ?? t("chat.message.agentFallback");
@@ -751,6 +759,20 @@ export function MessageActions(props: {
           <ReplyIcon />
         </Button>
       </Show>
+      <Show when={props.onBranch}>
+        {(onBranch) => (
+          <Button
+            variant="ghost"
+            type="button"
+            class="message-action-button"
+            aria-label={t("chat.actions.branch")}
+            disabled={props.branchDisabled === true}
+            onClick={() => onBranch()()}
+          >
+            <BranchIcon />
+          </Button>
+        )}
+      </Show>
     </div>
   );
 }
@@ -769,6 +791,12 @@ export function MessageMenu(props: {
   onReply?: (() => void) | undefined;
   onCopy: () => void;
   readAloud?: { reading: boolean; onToggle: () => void } | undefined;
+  /** Marks this message and the messages after it unread. Without it, the menu has no such item. */
+  onMarkUnread?: (() => void) | undefined;
+  /** Copies the thread through this message into a new thread. Without it, the menu has no such item. */
+  onBranch?: (() => void) | undefined;
+  /** A turn runs in the thread, so "Branch from here" shows but does nothing. */
+  branchDisabled?: boolean | undefined;
 }) {
   const { t } = useText();
   const authorName = () => props.authorName ?? t("chat.message.agentFallback");
@@ -833,6 +861,25 @@ export function MessageMenu(props: {
           <ContextMenu.Item onSelect={() => readAloud().onToggle()}>
             {readAloud().reading ? <StopIcon /> : <AudioLines aria-hidden="true" />}
             <span>{readAloud().reading ? t("chat.actions.stopReading") : t("chat.actions.readAloud")}</span>
+          </ContextMenu.Item>
+        )}
+      </Show>
+      <Show when={props.onBranch || props.onMarkUnread}>
+        <ContextMenu.Separator />
+      </Show>
+      <Show when={props.onBranch}>
+        {(onBranch) => (
+          <ContextMenu.Item disabled={props.branchDisabled === true} onSelectAfterClose={onBranch()}>
+            <BranchIcon />
+            <span>{t("chat.menu.branch")}</span>
+          </ContextMenu.Item>
+        )}
+      </Show>
+      <Show when={props.onMarkUnread}>
+        {(onMarkUnread) => (
+          <ContextMenu.Item onSelect={onMarkUnread()}>
+            <CircleDot aria-hidden="true" />
+            <span>{t("chat.menu.markUnread")}</span>
           </ContextMenu.Item>
         )}
       </Show>

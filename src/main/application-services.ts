@@ -22,6 +22,7 @@ import { type AgentAdminSettingsService, createAgentAdminSettings } from "./agen
 import { resolveAgentDataRoot } from "./agent-data-root";
 import { spawnAgentDatabaseHost } from "./agent-database-host-process";
 import { agentDisplayEnvironment, hasSeparateAgentDisplay } from "./agent-display";
+import { type AgentFolders, createAgentFolders } from "./agent-folders";
 import { type AgentHostSettingsService, createAgentHostSettings } from "./agent-host-settings";
 import { type BrowserProfileService, createBrowserProfileService } from "./browser-profile-service";
 import { HostReleaseService, readInstallationMode } from "./host-release-service";
@@ -38,6 +39,7 @@ import { MAC_PERMISSION_URLS } from "./mac-permission-urls";
 import { PushNotificationStore } from "./push-notification-store";
 import { DESKTOP_USE_MS } from "./push-notifications";
 import { RemoteWorkflowError, toRemoteWorkflowError } from "./remote-service-effects";
+import { createTaskWorktree } from "./task-worktree";
 /**
  * The composition root. Every long-lived service the desktop app owns is built here, in one
  * function, in dependency order, and handed back as a single record.
@@ -118,6 +120,7 @@ import { sweepProviderTemp } from "../backend/provider-temp";
 import { SidebarLayoutStore } from "../backend/sidebar-layout-store";
 import { StorageUsageScanner, StorageUsageService } from "../backend/storage-usage";
 import { TeamChatStore } from "../backend/team-chat-store";
+import { type AcpRegistry, createAcpRegistry } from "./acp-registry";
 import { AGENT_ACCESS_FILE, AgentAccessStore } from "./agent-access-store";
 import {
   type AgentDefaultsPreferenceStore,
@@ -161,6 +164,8 @@ import {
 import { isSupportedCuaDriverTarget, resolveCuaDriver } from "./cua-driver-artifact";
 import { CuaDriverDaemonClient } from "./cua-driver-daemon-client";
 import { CuaDriverRuntime, cuaDriverCommandAlias, resolveCuaDriverEndpoint } from "./cua-driver-runtime";
+import { type CustomAgentChanges, createCustomAgentChanges } from "./custom-agent-changes";
+import { CUSTOM_AGENTS_FILE, CustomAgentStore } from "./custom-agent-store";
 import { type CustomProviderChanges, createCustomProviderChanges } from "./custom-provider-changes";
 import { CustomProviderStore } from "./custom-provider-store";
 import { MCP_OAUTH_REDIRECT_URL } from "./deep-link-router";
@@ -574,6 +579,9 @@ export interface ApplicationServices {
   serverMode: ServerMode | null;
   customProviders: CustomProviderStore;
   customProviderChanges: CustomProviderChanges;
+  customAgentChanges: CustomAgentChanges;
+  agentFolders: AgentFolders;
+  acpRegistry: AcpRegistry;
   externalProviders: ExternalProvidersManager;
   subscriptions: SubscriptionPluginRuntime;
   subscriptionModels: SubscriptionModelBridge;
@@ -1113,6 +1121,13 @@ export async function createApplicationServices({
   // Before the service, which reads the endpoints at its first provider spawn. A file this build
   // cannot read leaves the list empty and every write refused; it does not stop the app.
   await runCauseEffect(customProviders.load());
+  // The same reasons as the endpoints: before the service, and a file this build cannot read only
+  // refuses the writes.
+  const customAgents = new CustomAgentStore({
+    path: join(app.getPath("userData"), CUSTOM_AGENTS_FILE),
+    cipher: secretCipher,
+  });
+  await runCauseEffect(customAgents.load());
   const externalProviders = ExternalProvidersManager.getOrCreate(join(app.getPath("userData"), "provider-state"));
   let reloadSubscriptions = () => {};
   const subscriptions = new SubscriptionPluginRuntime({
@@ -1137,6 +1152,7 @@ export async function createApplicationServices({
     createProviderDetection({
       settings: providerDetectionSettings,
       customProviders,
+      customAgents,
     }),
   );
   teardown.push(TEARDOWN_ORDER.providerDetection, "model server discovery", () =>
@@ -1494,6 +1510,12 @@ export async function createApplicationServices({
         }),
     hostMemory,
     requestTimeoutMs: 30_000,
+    // The worktree of an isolated task is a folder of the user's own repository: the main process
+    // owns the git calls, and the store row that names the checkout lives in the database host.
+    createTaskWorktree: (workspacePath, threadId, existingPath) =>
+      createTaskWorktree(workspacePath, threadId, existingPath),
+    // The desktop gives the oldest person-headed waiting lane one slot past the task limit.
+    personExtraSlot: true,
     offProviders: providerUse.off(),
     providerAccounts,
     saveProviderUse: (provider, on) =>
@@ -1523,6 +1545,7 @@ export async function createApplicationServices({
       // spawned provider process. The IPC handlers are given `list()`.
       customProviders: () => [...customProviders.configs(), ...subscriptionModels.configs()],
       // The same rule: `configs()`, with the environment values, goes to the agent process only.
+      customAgents: () => customAgents.configs(),
       // The enabled MCP servers, read at each spawn. The service owns the store, so this reads back
       // into the object being constructed; nothing calls it before the constructor returns.
       mcpServers: () => service.enabledMcpServers(),
@@ -1673,7 +1696,7 @@ export async function createApplicationServices({
         ),
       notify: forwardWorkflowNotice,
       connectionOn: (connectionId) => service.messaging.store.connection(connectionId)?.enabled === true,
-      post: (connectionId, placeId, markdown) => service.messaging.deliver(connectionId, placeId, markdown),
+      post: (connectionId, placeId, markdown, key) => service.messaging.deliver(connectionId, placeId, markdown, key),
       // An agent event, so this window, joined clients and the web app hear it the same way.
       changed: (workflowId) => service.notifyWorkflowsChanged(workflowId),
       rearm: () => service.armRoutines(),
@@ -1703,7 +1726,7 @@ export async function createApplicationServices({
         return record?.enabled ? { platform: record.platform, name: record.workspaceName } : null;
       },
       options: () => service.messaging.destinationOptions(),
-      post: (connectionId, placeId, markdown) => service.messaging.deliver(connectionId, placeId, markdown),
+      post: (connectionId, placeId, markdown, key) => service.messaging.deliver(connectionId, placeId, markdown, key),
       changed: (agentIds) => {
         for (const agentId of agentIds) service.notifyRoutineResultsChanged(agentId);
       },
@@ -1935,6 +1958,25 @@ export async function createApplicationServices({
   const agentHostSettings = createAgentHostSettings({ agents: service, busyMessageMode, agentDefaults });
   const browserProfiles = createBrowserProfileService({ store: browserProfileStore, agents: service, browser });
   const customProviderChanges = createCustomProviderChanges({ service, customProviders });
+  const customAgentChanges = createCustomAgentChanges({ service, customAgents });
+  const agentFolders = createAgentFolders({ service, userDataPath: app.getPath("userData") });
+  const acpRegistry = createAcpRegistry({
+    directory: app.getPath("userData"),
+    customAgentChanges,
+    withRuntimeRemoval: (ids, operation) =>
+      service
+        .withCustomAgentRuntimeRemoval(ids, () =>
+          operation.pipe(
+            Effect.mapError(
+              (failure) => new AgentLifecycleFailed({ operation: "removeCustomAgentRuntime", cause: failure.cause }),
+            ),
+          ),
+        )
+        .pipe(toProviderRuntimeFailure),
+  });
+  teardown.push(TEARDOWN_ORDER.providerRuntimes - 1, "ACP registry installations", () =>
+    runCauseEffect(acpRegistry.close()),
+  );
   // The host comes before the updater, and the restart readiness reads the host. The routes reach
   // the schedule through this, and a request that arrives before it exists is refused.
   let requestedUpdate: RequestedUpdate | undefined;
@@ -2774,6 +2816,9 @@ export async function createApplicationServices({
     serverMode,
     customProviders,
     customProviderChanges,
+    customAgentChanges,
+    agentFolders,
+    acpRegistry,
     externalProviders,
     subscriptions,
     subscriptionModels,

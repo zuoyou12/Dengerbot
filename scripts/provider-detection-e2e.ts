@@ -102,6 +102,8 @@ try {
     createProviderDetection({
       settings,
       customProviders: endpoints,
+      // The e2e names no custom agents, so a scan suggests every preset id freely.
+      customAgents: { configs: () => [] },
       probe: probeModels,
     }),
   );
@@ -131,11 +133,7 @@ try {
   assert.ok(!found.some((server) => server.baseUrl === redirecting.baseUrl), "A redirect is not a server.");
   assert.equal(primary.seen.length, 1, "The redirect target gets only the direct request.");
   assert.equal(primary.seen[0]?.authorization, null, "A scan sends no key.");
-  const agents = await Effect.runPromise(
-    (
-      detection as unknown as { scanAgents(): Effect.Effect<Array<{ command: string; name: string }>, never, never> }
-    ).scanAgents(),
-  );
+  const agents = await Effect.runPromise(detection.scanAgents());
   const goose = agents.find((agent) => agent.command === join(agentFolder, "goose"));
   assert.ok(goose, "The agent in the listed folder is found.");
   await assert.rejects(stat(marker), { code: "ENOENT" }, "The scan does not start the agent.");
@@ -210,14 +208,7 @@ try {
   const before = primary.seen.length;
   await runCauseEffect(settings.set({ ...settings.get(), enabled: false }));
   assert.deepEqual(await Effect.runPromise(detection.scanModelServers()), []);
-  assert.deepEqual(
-    await Effect.runPromise(
-      (
-        detection as unknown as { scanAgents(): Effect.Effect<Array<{ command: string; name: string }>, never, never> }
-      ).scanAgents(),
-    ),
-    [],
-  );
+  assert.deepEqual(await Effect.runPromise(detection.scanAgents()), []);
   assert.equal(primary.seen.length, before, "A disabled scan sends nothing.");
   const reloaded = new ProviderDetectionSettingsStore(join(root, "openbot-provider-detection-v1.json"));
   await runCauseEffect(reloaded.load());

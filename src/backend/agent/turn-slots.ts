@@ -14,6 +14,11 @@ export interface TurnSlotsOptions {
   isWaiting(lane: string): boolean;
   /** The delivery at the head of the lane's queue. */
   head(lane: string): QueueDelivery | null;
+  /**
+   * One slot past the limit for the oldest waiting lane whose head is a person message. Desktop
+   * only: a hosted server keeps its fixed limit.
+   */
+  personExtraSlot?: boolean;
 }
 
 /**
@@ -36,8 +41,22 @@ export class TurnSlots {
     const limit = this.#options.limit();
     if (limit === null) return true;
     const lanes = this.#options.lanes();
-    const free = limit - lanes.filter((id) => this.#options.isRunning(id)).length;
-    if (free <= 0) return false;
+    const running = lanes.filter((id) => this.#options.isRunning(id)).length;
+    const free = limit - running;
+    if (free <= 0) {
+      // The one extra slot: the oldest waiting lane whose head is a person message may run past the
+      // limit, so a person never waits behind a full board of routine runs. A routine or teammate
+      // head never takes it, and only one lane does.
+      if (!this.#options.personExtraSlot || running > limit) return false;
+      const head = this.#options.head(lane);
+      if (head?.sender.kind !== "user") return false;
+      for (const other of lanes) {
+        if (other === lane || this.#options.isRunning(other) || !this.#options.isWaiting(other)) continue;
+        const otherHead = this.#options.head(other);
+        if (otherHead && startsBefore(otherHead, other, head, lane)) return false;
+      }
+      return true;
+    }
     const head = this.#options.head(lane);
     if (!head) return true;
     let ahead = 0;

@@ -1,3 +1,9 @@
+import type {
+  AcpRegistryEntry,
+  AcpRegistryInstallation,
+  AcpRegistryInstallInput,
+  AcpRegistryOperation,
+} from "./ipc-acp-registry";
 import type { AgentAccessChange, AgentAccessSnapshot } from "./ipc-agent-access";
 import type {
   AgentSessionSettings,
@@ -38,6 +44,16 @@ import type {
 } from "./ipc-agent-admin";
 import type { AgentAnalytics, AgentAnalyticsInput } from "./ipc-agent-analytics";
 import type { AgentIpcRequest, ScopedAgentEvent } from "./ipc-agent-events";
+import type {
+  AddAgentFolderInput,
+  AgentExclusionChange,
+  AgentFolderBrowse,
+  AgentFolderChange,
+  AgentFolderInput,
+  AgentFolderList,
+  BrowseAgentFoldersInput,
+  ChooseAgentFolderInput,
+} from "./ipc-agent-folders";
 import type { ClientAgentModelOption } from "./ipc-agent-identity";
 import type {
   AgentImportPreview,
@@ -80,6 +96,7 @@ import type {
   AgentTask,
   AgentTaskInput,
   AgentTasksSnapshot,
+  BranchAgentTaskInput,
   RenameAgentTaskInput,
   RunQueuedMessageAsTaskInput,
   StartAgentTaskInput,
@@ -187,6 +204,7 @@ import type {
   ConversationSnapshot,
   ConversationWithReadState,
   MarkConversationReadInput,
+  MarkConversationUnreadInput,
   OpenMessageLinkInput,
   PasteMessageLinkInput,
   ReadConversationPageInput,
@@ -196,6 +214,16 @@ import type {
   SendMessageInput,
   SetMessageReactionInput,
 } from "./ipc-conversations";
+import type {
+  CheckCustomAgentInput,
+  CustomAgentCheckResult,
+  CustomAgentResult,
+  CustomAgentSummary,
+  CustomAgentUsage,
+  DeleteCustomAgentInput,
+  DetectedAcpAgent,
+  SaveCustomAgentInput,
+} from "./ipc-custom-agents";
 import type {
   CustomProviderResult,
   CustomProviderSummary,
@@ -865,6 +893,26 @@ export const IPC_ENDPOINTS = {
     discoverModels: request<DiscoverModelsInput, DiscoverModelsResult>()("provider-detection:discover-models"),
     getSettings: request<undefined, ProviderDetectionSettings>()("provider-detection:get-settings"),
     setSettings: request<ProviderDetectionSettings, ProviderDetectionSettings>()("provider-detection:set-settings"),
+    // Looks for known agent command names only. It starts no file.
+    scanAgents: request<undefined, DetectedAcpAgent[]>()("provider-detection:scan-agents"),
+  },
+  // The user's own ACP agents, on this computer only: no Team API route and no `providerAdmin` entry.
+  // Environment values travel only towards main.
+  acpRegistry: {
+    search: scopedRequest<string, AcpRegistryEntry[]>()("acp-registry:search"),
+    installed: scopedQuery<AcpRegistryInstallation[]>()("acp-registry:installed"),
+    status: scopedQuery<AcpRegistryOperation[]>()("acp-registry:status"),
+    install: scopedRequest<AcpRegistryInstallInput, CustomAgentResult>()("acp-registry:install"),
+    cancel: scopedRequest<string, void>()("acp-registry:cancel"),
+    remove: scopedRequest<string, void>()("acp-registry:remove"),
+  },
+  customAgents: {
+    list: request<undefined, CustomAgentSummary[]>()("custom-agents:list"),
+    save: request<SaveCustomAgentInput, CustomAgentResult>()("custom-agents:save"),
+    delete: request<DeleteCustomAgentInput, CustomAgentResult>()("custom-agents:delete"),
+    check: request<CheckCustomAgentInput, CustomAgentCheckResult>()("custom-agents:check"),
+    // The answers of the agents that have a usage prompt. An agent with no answer is not listed.
+    usage: request<undefined, CustomAgentUsage[]>()("custom-agents:usage"),
   },
   // The providers of the computer that runs the agents. `providers`, `providerRuntimes` and
   // `customProviders` reach this computer only; these take the server, so a remote admin reaches the
@@ -1159,6 +1207,10 @@ export const IPC_ENDPOINTS = {
     markConversationRead: scopedRequest<MarkConversationReadInput, ConversationReadState>()(
       "agent:mark-conversation-read",
     ),
+    // Local only: the Team API unread route marks the whole chat, not from one message.
+    markConversationUnread: scopedRequest<MarkConversationUnreadInput, ConversationReadState>()(
+      "agent:mark-conversation-unread",
+    ),
     sendMessage: scopedRequest<SendMessageInput, QueuedMessageReceipt>()("agent:send-message"),
     setMessageReaction: scopedRequest<SetMessageReactionInput, void>()("agent:set-message-reaction"),
     listQueue: scopedRequest<string, QueueSnapshot>()("agent:list-queue"),
@@ -1169,6 +1221,8 @@ export const IPC_ENDPOINTS = {
     readTask: scopedRequest<AgentTaskInput, ConversationSnapshot>()("agent:tasks:read"),
     startTask: scopedRequest<StartAgentTaskInput, AgentTask>()("agent:tasks:start"),
     runQueuedMessageAsTask: scopedRequest<RunQueuedMessageAsTaskInput, AgentTask>()("agent:tasks:run-queued-message"),
+    // Local only: this computer holds the conversation a branch copies, and its files.
+    branchTask: scopedRequest<BranchAgentTaskInput, AgentTask>()("agent:tasks:branch"),
     stopTask: scopedRequest<AgentTaskInput, void>()("agent:tasks:stop"),
     closeTask: scopedRequest<AgentTaskInput, void>()("agent:tasks:close"),
     reopenTask: scopedRequest<AgentTaskInput, void>()("agent:tasks:reopen"),
@@ -1218,6 +1272,22 @@ export const IPC_ENDPOINTS = {
     automationRunCommand: scopedRequest<TestRoutineInput, string>()("agent:automation-run-command"),
     // Every routine of the host, of agents and channels, with its runs in a range.
     routineCalendar: scopedRequest<RoutineCalendarInput, RoutineCalendar>()("agent:routine-calendar"),
+  },
+  // The folders a local agent can change besides its workspace and the shared folder. This computer
+  // only: the fork registers no `agent-folders-v1`, so a joined host takes none of these.
+  agentFolders: {
+    listAgentFolders: scopedRequest<string, AgentFolderList>()("agent:folders:list"),
+    // Opens the folder picker in main. Only for an agent on this computer.
+    chooseAgentFolder: request<ChooseAgentFolderInput, AgentFolderChange>()("agent:folders:choose"),
+    // A dropped or browsed folder, or the Undo of a removal. The host checks each path as it checks a
+    // picked one. `replace` puts the folder in the place of a folder that is gone.
+    addAgentFolder: scopedRequest<AddAgentFolderInput, AgentFolderChange>()("agent:folders:add"),
+    removeAgentFolder: scopedRequest<AgentFolderInput, AgentFolderChange>()("agent:folders:remove"),
+    // Folders in those that the agent must not change. The picker opens in main; add is the Undo.
+    chooseAgentExclusion: request<string, AgentExclusionChange>()("agent:folders:exclusions:choose"),
+    addAgentExclusion: scopedRequest<AgentFolderInput, AgentExclusionChange>()("agent:folders:exclusions:add"),
+    removeAgentExclusion: scopedRequest<AgentFolderInput, AgentExclusionChange>()("agent:folders:exclusions:remove"),
+    browseAgentFolders: scopedRequest<BrowseAgentFoldersInput, AgentFolderBrowse>()("agent:folders:browse"),
   },
   channelMemories: {
     listChannelMemories: scopedRequest<string, ChannelMemory[]>()("agent:channel-memories:list"),
@@ -1586,6 +1656,8 @@ export const IPC_GROUP_PATHS = {
   skills: "skills",
   customProviders: "customProviders",
   providerDetection: "providerDetection",
+  customAgents: "customAgents",
+  acpRegistry: "acpRegistry",
   providerAdmin: "providerAdmin",
   messaging: "messaging",
   hostAdmin: "hostAdmin",
@@ -1604,6 +1676,7 @@ export const IPC_GROUP_PATHS = {
   agentMemories: "agent",
   sharedTables: "agent",
   agentRoutines: "agent",
+  agentFolders: "agent",
   channelMemories: "agent",
   channelRoutines: "agent",
   agentAttachments: "agent",

@@ -22,6 +22,7 @@ import type {
   HostStatus,
   InviteSummary,
   MarkConversationReadInput,
+  MarkConversationUnreadInput,
   MarkDirectReadInput,
   RemoteDesktopDisplay,
   RemoteDesktopIceServer,
@@ -1120,6 +1121,14 @@ export class HostService extends EventEmitter<HostEvents> {
     return remoteDecode(() => this.#currentAgentReaderId()).pipe(
       Effect.flatMap((readerId) =>
         this.#options.agents.markConversationRead(input.agentId, readerId, input.throughMessageId),
+      ),
+    );
+  }
+
+  markAgentConversationUnread(input: MarkConversationUnreadInput) {
+    return remoteDecode(() => this.#currentAgentReaderId()).pipe(
+      Effect.flatMap((readerId) =>
+        this.#options.agents.markConversationUnread(input.agentId, readerId, input.fromMessageId),
       ),
     );
   }

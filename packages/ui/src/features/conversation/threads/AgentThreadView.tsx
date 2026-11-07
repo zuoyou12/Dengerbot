@@ -1,16 +1,20 @@
 import type { AgentApproval, AgentTask, AgentTaskHold, AttachmentSummary } from "@openbot/contracts/ipc";
 import type { AppTextKey } from "@openbot/i18n";
 import { isAgentTaskActive } from "@openbot/team-client/agent-tasks";
-import { ArrowUp, Button, Square } from "@openbot/ui";
+import { ArrowUp, Button, Checkbox, Square } from "@openbot/ui";
 import { createScrollFades } from "@openbot/ui/components/createScrollFades";
 import type { AgentMessage, AgentProfile } from "@openbot/ui/data";
 import { AgentActivityIndicator, nextAgentActivityLabel } from "@openbot/ui/features/conversation/AgentActivity";
+import { branchPointIds } from "@openbot/ui/features/conversation/branch-points";
 import { ChatMessageRow } from "@openbot/ui/features/conversation/ChatMessageRow";
 import { ComposerEditor } from "@openbot/ui/features/conversation/ComposerEditor";
 import { ComposerNotice } from "@openbot/ui/features/conversation/ComposerNotice";
 import { ApprovalCard } from "@openbot/ui/features/conversation/ConversationPrompts";
+import { MessageActions, MessageMenu } from "@openbot/ui/features/conversation/MessageRendering";
+import { type AgentThreadBranchSource, BranchDivider } from "@openbot/ui/features/conversation/threads/BranchDivider";
 import { type TextValue, useText } from "@openbot/ui/text";
-import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { createEffect, createMemo, createSignal, createUniqueId, For, onSettled, Show } from "solid-js";
 
 const HOLD_TEXT = {
   "agent-restarting": "conversation.threads.hold.agentRestarting",
@@ -66,6 +70,20 @@ export interface AgentThreadViewProps {
   /** The approval that the thread's running turn waits for. */
   approval?: AgentApproval | undefined;
   onRespondApproval: (decision: "accept" | "decline") => Promise<boolean>;
+  /** Copies one message. Missing where the host cannot copy, so the messages carry no action row. */
+  onCopyMessage?: ((message: AgentMessage) => void) | undefined;
+  /** The message that Copy last copied, for its check mark. */
+  copiedMessageId?: string | undefined;
+  /** Branches the thread through an answer. Missing where the host cannot branch. */
+  onBranch?: ((messageId: string) => void) | undefined;
+  /** Where the thread came from, when it is a branch. A line shows after the copied messages. */
+  branchSource?: AgentThreadBranchSource | undefined;
+  /** The message that the thread scrolls to once, after a click on "Branched from". */
+  focusMessage?: { taskId: string; messageId: string; nonce: number } | undefined;
+  /** Whether the new thread's first message runs in its own git worktree of the workspace. */
+  isolatedWorktree?: boolean | undefined;
+  /** Sets that wish. Missing where the host cannot create a worktree, so the checkbox does not show. */
+  onIsolatedWorktreeChange?: ((on: boolean) => void) | undefined;
 }
 
 /**
@@ -85,7 +103,17 @@ export function AgentThreadView(props: AgentThreadViewProps) {
       setDraft("");
     },
   );
+  // A click on "Branched from" lands here once per request: the row scrolls into the middle.
+  createEffect(
+    () => props.focusMessage,
+    (focus) => {
+      if (!focus || focus.taskId !== props.task?.id) return;
+      const element = scroller?.querySelector(`[data-chat-search-message="${CSS.escape(focus.messageId)}"]`);
+      element?.scrollIntoView({ block: "center" });
+    },
+  );
   const activityLabel = nextAgentActivityLabel();
+  const worktreeId = createUniqueId();
   const fades = createScrollFades();
   onSettled(() => {
     const element = scroller;
@@ -108,6 +136,15 @@ export function AgentThreadView(props: AgentThreadViewProps) {
     };
   });
   const active = () => (props.task ? isAgentTaskActive(props.task) : false);
+  /** The answers that end a finished turn: each offers a branch. */
+  const branchPoints = createMemo(() => branchPointIds(props.messages, props.task?.activeTurnId));
+  /** A turn runs, so a branch waits: the backend copies only a thread that does not run. */
+  const branchBusy = () => props.task?.activeTurnId != null;
+  const branchAction = (message: AgentMessage) => {
+    const onBranch = props.onBranch;
+    if (!onBranch || !branchPoints().has(message.id)) return undefined;
+    return () => onBranch(message.id);
+  };
   const title = () => props.task?.title ?? t("conversation.threads.new");
   const placeholder = () =>
     props.task
@@ -127,6 +164,48 @@ export function AgentThreadView(props: AgentThreadViewProps) {
     message.author === "you"
       ? { kind: "you" as const, name: t("chat.message.you") }
       : { kind: "agent" as const, name: props.agent.name, agent: props.agent };
+  /** The action row of a message: Copy, and Branch on the last answer of a finished turn. */
+  function messageActions(message: AgentMessage): JSX.Element | undefined {
+    const onCopy = props.onCopyMessage;
+    if (!onCopy || message.streaming) return undefined;
+    return (
+      <MessageActions
+        message={message}
+        authorName={author(message).name}
+        reactions={false}
+        pickerOpen={false}
+        expandedEmoji={false}
+        copied={props.copiedMessageId === message.id}
+        onTogglePicker={() => undefined}
+        onExpandEmoji={() => undefined}
+        onReact={() => undefined}
+        onCopy={() => onCopy(message)}
+        onBranch={branchAction(message)}
+        branchDisabled={branchBusy()}
+      />
+    );
+  }
+  /** The right-click menu of a message, with the actions of its action row. */
+  function messageMenu(message: AgentMessage): (() => JSX.Element) | undefined {
+    const onCopy = props.onCopyMessage;
+    if (!onCopy || message.streaming) return undefined;
+    return () => (
+      <MessageMenu
+        message={message}
+        authorName={author(message).name}
+        reactions={false}
+        onReact={() => undefined}
+        onCopy={() => onCopy(message)}
+        onBranch={branchAction(message)}
+        branchDisabled={branchBusy()}
+      />
+    );
+  }
+  /** The branch line shows after the last message that the branch copied. */
+  function branchDividerAfter(messageId: string): AgentThreadBranchSource | undefined {
+    const source = props.branchSource;
+    return source?.throughMessageId === messageId ? source : undefined;
+  }
   const failed = () => (props.task?.state === "idle" && props.task.outcome === "failed" ? props.task : undefined);
   const running = () => (props.task?.state === "running" && !props.approval ? props.task : undefined);
   const queued = () => (props.task && props.task.queuedMessages.length > 0 ? props.task : undefined);
@@ -159,7 +238,11 @@ export function AgentThreadView(props: AgentThreadViewProps) {
                   onOpenLink={props.onOpenLink}
                   onPreview={props.onPreview}
                   onAttachmentAction={props.onAttachmentAction}
+                  actions={messageActions(message())}
+                  menu={messageMenu(message())}
+                  data-chat-search-message={message().id}
                 />
+                <Show when={branchDividerAfter(message().id)}>{(source) => <BranchDivider source={source()} />}</Show>
               </div>
             )}
           </For>
@@ -203,6 +286,21 @@ export function AgentThreadView(props: AgentThreadViewProps) {
         </div>
       </section>
       <div class="composer-wrap">
+        <Show when={props.task === null && props.onIsolatedWorktreeChange}>
+          {(onChange) => (
+            <label class="agent-thread-worktree" for={worktreeId}>
+              <Checkbox
+                id={worktreeId}
+                checked={props.isolatedWorktree === true}
+                onChange={(event) => onChange()(event.currentTarget.checked)}
+              />
+              <span class="agent-thread-worktree-copy">
+                <span>{t("conversation.threads.worktree.label")}</span>
+                <span class="agent-thread-worktree-hint">{t("conversation.threads.worktree.hint")}</span>
+              </span>
+            </label>
+          )}
+        </Show>
         <Show when={failed()}>
           {(task) => (
             <ComposerNotice

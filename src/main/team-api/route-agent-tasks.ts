@@ -70,6 +70,10 @@ export async function routeAgentTasks(
 }
 
 function startTask(tasks: TeamApiAgentTasks, agentId: string, body: DynamicRecord, member: TeamMemberSummary) {
+  // The frozen route carries no worktree flag: a checkout is a folder of the host's own disk, so a
+  // remote start can never ask for one.
+  if (body.isolatedWorktree !== undefined)
+    throw new HttpError(400, sourceText("error.backend.taskWorktreeRemoteUnsupported"));
   return runCauseEffect(
     tasks.startTask(
       { agentId, text: stringField(body, "text", false, INPUT_LIMITS.messageText), ...clientMessageId(body) },

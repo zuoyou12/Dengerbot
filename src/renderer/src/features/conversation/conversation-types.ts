@@ -273,6 +273,8 @@ export interface ConversationProps {
     voiceRecordingDraftId?: string,
   ) => Promise<SendMessageResult>;
   onMarkRead: () => Promise<void>;
+  /** Marks an agent message and the messages after it unread. Without it, the message menu has no such item. */
+  onMarkUnread?: ((messageId: string) => Promise<void>) | undefined;
   onLoadOlder?: (() => void) | undefined;
   onLoadLatest?: (() => Promise<void>) | undefined;
   onSearchMessages?: ((query: string) => Promise<{ messageIds: string[]; total: number }>) | undefined;
@@ -390,9 +392,29 @@ export interface ConversationThreads {
   conversation: ConversationSnapshot | undefined;
   /** The approval that the open side thread's turn waits for. */
   approval: AgentApproval | undefined;
-  onSend: (text: string) => Promise<boolean>;
+  onSend: (text: string, options?: { isolatedWorktree?: boolean }) => Promise<boolean>;
   onStop: () => void;
   onRespondApproval: (decision: "accept" | "decline") => Promise<boolean>;
   /** Missing when the host cannot move a queued message to a new thread. */
   onRunQueuedMessage?: ((deliveryId: string) => void) | undefined;
+  /**
+   * Copies a conversation through an agent answer into a new thread, and opens it: the agent's own
+   * chat when `sourceTaskId` is null, or a side thread. Resolves true when the branch opened. Missing
+   * when this computer cannot branch.
+   */
+  onBranch?: ((sourceTaskId: string | null, messageId: string) => Promise<boolean>) | undefined;
+  /** Where a side thread came from, when it is a branch. Undefined for a thread that is no branch. */
+  branchSource: (task: AgentTask) => ConversationBranchSource | undefined;
+  /** The message that a side thread scrolls to once, after a click on "Branched from". */
+  focusMessage: { taskId: string; messageId: string; nonce: number } | null;
+}
+
+/** The source of a branch: the agent's own chat, a side thread, or a side thread that was deleted. */
+export interface ConversationBranchSource {
+  throughMessageId: string;
+  /** The title of the source thread. Null for the agent's own chat, which shows the agent's name. */
+  title: string | null;
+  deleted: boolean;
+  /** Opens the source at the message that the branch came from. */
+  onOpen: () => void;
 }

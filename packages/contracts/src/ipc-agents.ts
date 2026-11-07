@@ -1,5 +1,6 @@
 import { type AgentProviderRef, isAgentProviderRef } from "./agent-providers";
 import { INPUT_LIMITS } from "./input-limits";
+import { isAgentAdditionalFolders } from "./ipc-agent-folders";
 import {
   type AgentModelId,
   type AgentReasoningEffort,
@@ -218,6 +219,16 @@ export interface AgentSummary {
    */
   access?: AgentAccess;
   /**
+   * The folders that the user gave the agent besides its workspace and the shared folder, as absolute
+   * paths. Local-only, like `access`. Absent means none. Only `agentFolders` changes them.
+   */
+  additionalFolders?: string[];
+  /**
+   * Folders in the workspace, the shared folder or `additionalFolders` that the agent must not change
+   * in Workspace only. Local-only, like `access`. Absent means none. Only `agentFolders` changes them.
+   */
+  excludedFolders?: string[];
+  /**
    * Whether the agent gets the Computer Use tools. Local-only, like `access`. Absent means on; see
    * `agentComputerUseEnabled`.
    */
@@ -329,6 +340,8 @@ function hasAgentSummaryFields(value: DynamicRecord): boolean {
     (value.sessionSettingOverrides === undefined || isAgentSessionSettingOverrides(value.sessionSettingOverrides)) &&
     (value.sessionSettingResets === undefined || isAgentSessionSettingResets(value.sessionSettingResets)) &&
     (value.access === undefined || isAgentAccess(value.access)) &&
+    (value.additionalFolders === undefined || isAgentAdditionalFolders(value.additionalFolders)) &&
+    (value.excludedFolders === undefined || isAgentAdditionalFolders(value.excludedFolders)) &&
     (value.computerUse === undefined || isBoolean(value.computerUse)) &&
     (value.allowAutomation === undefined || isBoolean(value.allowAutomation)) &&
     (value.allowNewChat === undefined || isBoolean(value.allowNewChat)) &&
@@ -381,6 +394,10 @@ export interface UpdateAgentInput {
   model?: AgentModelId;
   reasoningEffort?: AgentReasoningEffort;
   access?: AgentAccess;
+  /** The added folders, as the `agentFolders` group changes them. Local-only. */
+  additionalFolders?: string[];
+  /** The excluded folders, as the `agentFolders` group changes them. Local-only. */
+  excludedFolders?: string[];
   computerUse?: boolean;
   /** `null` returns the agent to the account default, as for `allowNewChat` and `quickAcknowledgement`. */
   allowAutomation?: boolean | null;

@@ -14,6 +14,7 @@ import { desktopBrowserProfileCalls } from "../browser/browser-profiles-port";
 import type { AgentFilesOptions } from "../files/AgentFilesSettings";
 import { canManageStorage, serverHasStorage } from "../files/storage-usage";
 import { serverCanAdminister, serverSupportsCapability } from "../servers/server-capabilities";
+import { agentFolderCalls } from "./agent-folders-port";
 import { htmlAttachmentPageHtml, htmlAttachmentPageUrl } from "./chat-visual-url";
 import { useConversationController } from "./conversation-controller-context";
 import { conversationRuntime } from "./conversation-runtime";
@@ -122,6 +123,12 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
   const { t, errorMessage } = useText();
   // A remote agent's host resolves its settings, so the account defaults of this computer do not apply.
   const localAgentDefaults = () => (props.server?.kind === "local" ? props.agentDefaults : undefined);
+  // The folders of an agent on this computer. This fork registers no `agent-folders-v1`, so a joined
+  // server's agent gets no Folders row and its host keeps its own folder checks.
+  const folderCalls = createMemo(() => {
+    if (props.runtime || props.server?.kind !== "local") return undefined;
+    return agentFolderCalls();
+  });
   // The web client asks the host directly; desktop goes through main for this computer and for a joined server.
   // The calls follow the server id, so a new summary of the same server keeps the loaded profiles.
   const browserProfileServerId = createMemo(() =>
@@ -397,6 +404,7 @@ export function ConversationPanels(panelProps: { onOpenUsage?: ((trigger: HTMLBu
             <AgentSettingsPanel
               remoteClient={Boolean(props.runtime)}
               localHost={props.server?.kind === "local"}
+              folders={folderCalls()}
               sessionSettingsEditable={serverCanAdminister(props.server, "agent-session-settings-v1")}
               adminCalls={props.runtime?.admin}
               skillsMarketplaceOpen={props.skillsMarketplaceOpen}

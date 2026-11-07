@@ -1,11 +1,12 @@
 // A time series of what one app instance holds, for `dev:bench`. Each tick
-// reads the `ps` tree under the recorded pid; every few ticks it also reads the
-// JS heap and DOM counters of each page over CDP and the main-process heap over
-// the Node inspector. Those two are slower and wake the process they read, so
-// they run less often than `ps`, which costs the app nothing.
+// reads the process tree under the recorded pid; every few ticks it also reads
+// the JS heap and DOM counters of each page over CDP and the main-process heap
+// over the Node inspector. Those two are slower and wake the process they read,
+// so they run less often than the process read, which costs the app nothing.
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { isDynamicRecord, isString } from "@openbot/contracts/runtime-values";
 import type { Logger } from "@openbot/logging";
 import type { Browser, CDPSession, Page } from "playwright-core";
 import { cpuMetrics, type MetricValues, parseFootprint, processMetrics } from "./bench-stats";
@@ -36,8 +37,67 @@ export interface ResourceSample {
 }
 
 async function readProcessTree(rootPid: number): Promise<ProcessTableRow[]> {
+  if (process.platform === "win32") return readWindowsProcessTree(rootPid);
   const { stdout } = await run("ps", PROCESS_TABLE_PS_ARGS, { maxBuffer: 16 * 1_024 * 1_024 });
   return collectDescendants(parseProcessTable(stdout), rootPid);
+}
+
+// Windows has no `ps`, and the table comes from one PowerShell call instead.
+// `WorkingSetSize` is bytes, and `KernelModeTime` + `UserModeTime` are 100 ns
+// units, so their sum over ten million is the cumulative CPU seconds, the same
+// counter `ps -o cputime=` reads elsewhere. One row arrives as an object rather
+// than a one-element array, so the parser accepts both shapes.
+const WINDOWS_PROCESS_SCRIPT =
+  "@(Get-CimInstance Win32_Process | " +
+  "Select-Object ProcessId, ParentProcessId, WorkingSetSize, KernelModeTime, UserModeTime, CommandLine) | " +
+  "ConvertTo-Json -Compress -Depth 2";
+
+function parseWindowsProcessTable(stdout: string): ProcessTableRow[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return [];
+  }
+  const rows = Array.isArray(parsed) ? parsed : isDynamicRecord(parsed) ? [parsed] : [];
+  const table: ProcessTableRow[] = [];
+  for (const row of rows) {
+    if (!isDynamicRecord(row)) continue;
+    const pid = row.ProcessId;
+    const parentPid = row.ParentProcessId;
+    const workingSet = row.WorkingSetSize;
+    const kernelTime = row.KernelModeTime;
+    const userTime = row.UserModeTime;
+    if (
+      typeof pid !== "number" ||
+      typeof parentPid !== "number" ||
+      typeof workingSet !== "number" ||
+      typeof kernelTime !== "number" ||
+      typeof userTime !== "number"
+    ) {
+      continue;
+    }
+    table.push({
+      pid,
+      ppid: parentPid,
+      rssKb: Math.round(workingSet / 1_024),
+      cpuSeconds: (kernelTime + userTime) / 10_000_000,
+      command: isString(row.CommandLine) ? row.CommandLine : "",
+    });
+  }
+  return table;
+}
+
+async function readWindowsProcessTree(rootPid: number): Promise<ProcessTableRow[]> {
+  // A clean module path keeps the call fast: the profile the shell would load
+  // is never wanted here. An unreadable process (an ACL another user owns) is
+  // absent from the table, which reads as a process that exited.
+  const { stdout } = await run("powershell", ["-NoProfile", "-NonInteractive", "-Command", WINDOWS_PROCESS_SCRIPT], {
+    maxBuffer: 32 * 1_024 * 1_024,
+    timeout: 15_000,
+    env: { ...process.env, PSModulePath: "" },
+  });
+  return collectDescendants(parseWindowsProcessTable(stdout), rootPid);
 }
 
 // macOS only. Elsewhere, or for a process the tool may not read, the pid is
@@ -78,6 +138,7 @@ async function withSession<T>(page: Page, use: (session: CDPSession) => Promise<
 export class ResourceSampler {
   readonly #options: ResourceSamplerOptions;
   readonly #samples: ResourceSample[] = [];
+  readonly #sampleErrors: string[] = [];
   #previousRows: ProcessTableRow[] | null = null;
   #previousAt = 0;
   #tick = 0;
@@ -143,10 +204,16 @@ export class ResourceSampler {
     const loop = async (): Promise<void> => {
       if (this.#stopped) return;
       const started = Date.now();
-      const sample = await this.#sample(this.#tick % heapEvery === 0);
-      this.#tick += 1;
-      // The first reading has no CPU interval. It still carries RSS.
-      this.#samples.push(sample);
+      try {
+        const sample = await this.#sample(this.#tick % heapEvery === 0);
+        this.#tick += 1;
+        // The first reading has no CPU interval. It still carries RSS.
+        this.#samples.push(sample);
+      } catch (error) {
+        // One failed tick is a gap, not a failed run: the next tick tries again, and stop() names
+        // what went missing, so an empty series is never mistaken for an idle app.
+        this.#sampleErrors.push(error instanceof Error ? error.message : String(error));
+      }
       if (this.#stopped) return;
       this.#timer = setTimeout(
         () => {
@@ -162,6 +229,11 @@ export class ResourceSampler {
     this.#stopped = true;
     if (this.#timer) clearTimeout(this.#timer);
     await this.#running;
+    if (this.#sampleErrors.length > 0) {
+      this.#options.logger.warn(
+        `the resource sampler lost ${this.#sampleErrors.length} of ${(this.#sampleErrors.length + this.#samples.length).toString()} ticks: ${this.#sampleErrors[0] ?? ""}`,
+      );
+    }
     return [...this.#samples];
   }
 

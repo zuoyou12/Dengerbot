@@ -27,6 +27,7 @@ import type {
   AskSideQuestionInput,
   AttachmentDataInput,
   AvatarImageInput,
+  BranchAgentTaskInput,
   CancelMcpSignInInput,
   CapabilityState,
   ChannelMemory,
@@ -124,6 +125,7 @@ import {
   WORKFLOWS_USAGE_ID,
   workspaceAccessEnforced,
 } from "@openbot/contracts/ipc";
+import { isDynamicRecord, isOneOf } from "@openbot/contracts/runtime-values";
 import { ContextResetBusyError } from "@openbot/contracts/team-protocol/context-reset-v1";
 import type { QueueEditRequest } from "@openbot/contracts/team-protocol/queue-edit-v1";
 import { sourceText } from "@openbot/i18n/source";
@@ -225,8 +227,8 @@ import type { AgentApiKeys } from "./agent-api-keys";
 import type { AgentProvider } from "./agent-client";
 import type { AgentTables } from "./agent-data/agent-tables";
 import type { AgentStore } from "./agent-store";
-import { AgentTasks } from "./agent-tasks/agent-tasks";
-import { AgentThreadStore } from "./agent-threads/agent-thread-store";
+import { type AgentTaskBranchFailed, AgentTasks } from "./agent-tasks/agent-tasks";
+import { type AgentThreadRecord, AgentThreadStore } from "./agent-threads/agent-thread-store";
 import { AgentWaitStore } from "./agent-waits/agent-wait-store";
 import { AgentWaits } from "./agent-waits/agent-waits";
 import { writeFileAtomically } from "./atomic-json-file";
@@ -401,6 +403,17 @@ export interface AgentServiceOptions {
    * while memory is low, and only a fixed number of turns run at the same time.
    */
   hostMemory?: HostMemory | null;
+  /**
+   * Creates the git worktree of one task, or fails with a reason. The main process owns the git
+   * calls, because the worktree is a folder of the user's own repository. Omitted, a task that asks
+   * for isolation is refused.
+   */
+  createTaskWorktree?: (workspacePath: string, threadId: string, existingPath: string | null) => Promise<string>;
+  /**
+   * One slot past the task limit for the oldest person-headed waiting lane. The desktop build passes
+   * true; a server that shares its memory budget keeps the released behavior.
+   */
+  personExtraSlot?: boolean;
 }
 
 /** How long a user send's `clientMessageId` answers a retry. A retry follows a lost reply, not a day. */
@@ -443,6 +456,8 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
   readonly #memoryReview: MemoryReviewScheduler;
   readonly #waits: AgentWaits;
   readonly #tasks: AgentTasks;
+  /** The side threads' own store, shared with `#tasks`. It owns the worktree rows too. */
+  readonly #threadStore: AgentThreadStore;
   readonly #tables: AgentTables | null;
   readonly #routines: RoutineScheduler;
   readonly #routineTimer: RoutineTimer;
@@ -455,6 +470,10 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
   readonly #endpoints: CustomEndpoints;
   readonly #customEndpointNames: () => ReadonlyMap<string, string>;
   readonly #prepareAgentWorkspace: (agent: AgentSummary) => Effect.Effect<void, AgentLifecycleFailed>;
+  /** The main process's git worktree creation, or null. Null refuses a task that asks for isolation. */
+  readonly #createTaskWorktree:
+    | ((workspacePath: string, threadId: string, existingPath: string | null) => Promise<string>)
+    | null;
   readonly #hostedSites: HostedSiteCoordinator;
   readonly #conversation: ConversationRuntime;
   readonly #attention: AttentionRegistry;
@@ -510,12 +529,15 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
       githubConnector = null,
       hostMemory = null,
       busyMessageMode = () => DEFAULT_BUSY_MESSAGE_MODE,
+      createTaskWorktree = null,
+      personExtraSlot = false,
     } = options;
     this.#developmentDefaults = developmentDefaults;
     this.#busyMessageMode = busyMessageMode;
     this.#localSkillTools = localSkillTools;
     this.#routineFlowTools = routineFlowTools;
     this.#customEndpointNames = customEndpointNames;
+    this.#createTaskWorktree = createTaskWorktree;
     this.#store = store;
     // First of the sub-objects, because `#emitError` reads it to redact and every one of them is
     // given that callback.
@@ -565,8 +587,9 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
       (event) => this.#emit(event),
       () => this.listAgents(),
     );
+    this.#threadStore = new AgentThreadStore(store.database);
     this.#tasks = new AgentTasks({
-      store: new AgentThreadStore(store.database),
+      store: this.#threadStore,
       mailbox,
       conversation: this.#conversation,
       hooks: {
@@ -993,6 +1016,8 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
       serverHost: hostMemory !== null,
       sectionTeammates: (agentId) => this.sectionTeammates(agentId),
       channelThread: (threadId) => this.channels.store.channelForThread(threadId) !== null,
+      // A task that runs in its own worktree starts and resumes its provider session there.
+      worktreePath: (threadId) => this.#tasks.worktreePathForThread(threadId),
       hooks: {
         logRecovery: (agentId, provider, outcome) =>
           logger.warn("Recovered an unavailable provider session.", { agentId, provider, outcome }),
@@ -1241,6 +1266,7 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
       memory: this.#memoryHold,
       usageLimits: this.#usageLimits,
       tasks: this.#tasks,
+      personExtraSlot,
       hooks: {
         emitError: (code, error, agentId) => this.#emitError(code, error, agentId),
         redactMcp: (text) => this.#mcp.redact(text),
@@ -1538,6 +1564,11 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
 
   listAgents(): AgentSummary[] {
     return this.#duplication.visibleAgents(this.#store.list());
+  }
+
+  /** The folder that every local agent can change, beside its own workspace. */
+  get sharedRoot(): string {
+    return this.#store.sharedRoot;
   }
 
   /**
@@ -3951,6 +3982,58 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
     return this.#providers.reloadOpenCodeConfig();
   }
 
+  /** Replaces the custom agents' router so a saved or removed agent reaches it. Reports why, if it did not. */
+  reloadCustomAgents(): Effect.Effect<CustomProviderRestart, AgentLifecycleFailed> {
+    return this.#providers
+      .reloadCustomAgents()
+      .pipe(
+        Effect.mapError(
+          (failure) => new AgentLifecycleFailed({ operation: "reloadCustomAgents", cause: failure.cause }),
+        ),
+      );
+  }
+
+  withCustomAgentRuntimeRemoval<T>(
+    _customAgentIds: readonly string[],
+    operation: () => Effect.Effect<T, AgentLifecycleFailed>,
+  ): Effect.Effect<T, AgentLifecycleFailed> {
+    return this.#providers
+      .withCustomAgentRuntimeRemoval(() => operation().pipe(toProviderOperationFailed))
+      .pipe(
+        Effect.mapError(
+          (failure) => new AgentLifecycleFailed({ operation: "removeCustomAgentRuntime", cause: failure.cause }),
+        ),
+      );
+  }
+
+  /** See `ProviderRuntime.customAgentUsage`. */
+  customAgentUsage() {
+    return this.#providers.customAgentUsage();
+  }
+
+  /** See `CustomEndpoints.saveCustomAgent`. */
+  saveCustomAgent<T>(persist: () => Effect.Effect<T, AgentLifecycleFailed>): Effect.Effect<T, AgentLifecycleFailed> {
+    return this.#endpoints
+      .saveCustomAgent(() => persist().pipe(toEndpointChangeFailed))
+      .pipe(
+        Effect.mapError((failure) => new AgentLifecycleFailed({ operation: "saveCustomAgent", cause: failure.cause })),
+      );
+  }
+
+  /** See `CustomEndpoints.removeCustomAgent`: the agents on it move to another provider first. */
+  removeCustomAgent<T>(
+    customAgentId: string,
+    persist: () => Effect.Effect<T, AgentLifecycleFailed>,
+  ): Effect.Effect<T, AgentLifecycleFailed> {
+    return this.#endpoints
+      .removeCustomAgent(customAgentId, () => persist().pipe(toEndpointChangeFailed))
+      .pipe(
+        Effect.mapError(
+          (failure) => new AgentLifecycleFailed({ operation: "removeCustomAgent", cause: failure.cause }),
+        ),
+      );
+  }
+
   /** See `CustomEndpoints.save`: the exclusion of the id being saved and the caller's file write. */
   saveCustomProvider<T>(
     providerId: string,
@@ -4176,9 +4259,10 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
   markConversationUnread(
     agentId: string,
     memberId: string,
+    fromMessageId: string | null = null,
   ): Effect.Effect<ConversationReadState, AgentLifecycleFailed> {
     return this.#reader
-      .markUnread(agentId, memberId)
+      .markUnread(agentId, memberId, fromMessageId)
       .pipe(
         Effect.mapError(
           (failure) => new AgentLifecycleFailed({ operation: "markConversationUnread", cause: failure.cause }),
@@ -4267,6 +4351,22 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
       this.#requireNotHidden(input.agentId);
       return this.#tasks.create(input.agentId, input.text, "user");
     });
+    // A task that asked for isolation runs in its own checkout, or not at all: the row goes in
+    // before the first message, so every turn of the task starts in the worktree.
+    if (input.isolatedWorktree === true) {
+      yield* Effect.tryPromise({
+        try: () => this.#ensureTaskWorktree(task),
+        catch: (cause) =>
+          new AgentLifecycleFailed({ operation: "create task worktree", cause: taskWorktreeFailure(cause) }),
+      }).pipe(
+        Effect.tapError(() =>
+          Effect.sync(() => {
+            this.#tasks.discard(task);
+            this.#tasks.changed(task.agentId);
+          }),
+        ),
+      );
+    }
     this.#tasks.changed(task.agentId);
     yield* this.sendMessage(
       {
@@ -4324,6 +4424,35 @@ export class AgentService extends EventEmitter<AgentServiceEvents> {
     this.#drain.scheduleDrain(input.agentId);
     return this.#tasks.publicTask(task);
   }).bind(this);
+
+  /**
+   * Makes a branch of a conversation of the agent: a new side thread with a copy of the conversation
+   * through the turn of the chosen message. No turn starts. A branch is a local-machine action: this
+   * computer holds the conversation and its files.
+   */
+  readonly branchTask = Effect.fn("AgentService.branchTask")(function* (
+    this: AgentService,
+    input: BranchAgentTaskInput,
+  ): Effect.fn.Return<AgentTask, AgentLifecycleFailed | AgentTaskBranchFailed> {
+    yield* lifecycleStep("find agent", () => {
+      if (!this.listAgents().some((agent) => agent.id === input.agentId))
+        throw new Error(sourceText("error.agent.unknown", { id: input.agentId }));
+      this.#requireNotHidden(input.agentId);
+    });
+    const task = yield* this.#tasks.branch(input);
+    this.#tasks.changed(task.agentId);
+    return this.#tasks.publicTask(task);
+  }).bind(this);
+
+  /** The git worktree of a new task, created by the main process and named in `task_worktree`. */
+  async #ensureTaskWorktree(task: AgentThreadRecord): Promise<void> {
+    const create = this.#createTaskWorktree;
+    if (!create) throw new Error(sourceText("error.backend.taskWorktreeUnavailable"));
+    const agent = this.#store.list().find((candidate) => candidate.id === task.agentId);
+    if (!agent) throw new Error(sourceText("error.agent.unknown", { id: task.agentId }));
+    const path = await create(agent.workspacePath, task.threadId, this.#threadStore.worktreeForThread(task.threadId));
+    this.#threadStore.saveTaskWorktree(task.threadId, path, new Date().toISOString());
+  }
 
   /** Stops the task's running turn and cancels its queued messages. The task stays open. */
   readonly stopTask = Effect.fn("AgentService.stopTask")(function* (
@@ -5031,6 +5160,27 @@ function sameUsageLimit(choice: AgentModelChoice, limit: UsageLimitKey): boolean
 
 function lifecycleStep<A>(operation: string, run: () => A): Effect.Effect<A, AgentLifecycleFailed> {
   return Effect.try({ try: run, catch: (cause) => new AgentLifecycleFailed({ operation, cause }) });
+}
+
+/** Why an injected worktree creation refused, as the main process names it. */
+const TASK_WORKTREE_REASONS = ["not-a-repository", "bad-thread-id", "branch-taken", "git-failed"] as const;
+
+/** The readable failure of an injected worktree creation: its reason, or the failure as it is. */
+function taskWorktreeFailure(cause: unknown): Error {
+  if (isDynamicRecord(cause) && isOneOf(TASK_WORKTREE_REASONS, cause.reason)) {
+    switch (cause.reason) {
+      case "not-a-repository":
+        return new Error(sourceText("error.backend.taskWorktreeNotRepository"));
+      case "branch-taken":
+        return new Error(sourceText("error.backend.taskWorktreeBranchTaken"));
+      case "bad-thread-id":
+      case "git-failed":
+        return new Error(sourceText("error.backend.taskWorktreeGitFailed"));
+    }
+  }
+  // A failure that names no worktree reason is an Error from the injected git calls, or a defect
+  // that the handler reports with its own message.
+  return cause instanceof Error ? cause : new Error(sourceText("error.backend.taskWorktreeGitFailed"));
 }
 
 /** These tasks already run; stopping the service joins them without starting new work. */

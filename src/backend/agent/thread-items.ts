@@ -68,11 +68,15 @@ export function refusedSessionFailure(provider: AgentProvider, message: string):
   return null;
 }
 
-/** Both providers speak ACP, which converts a confirmed missing session before this boundary. */
-export function isMissingProviderSessionError(error: unknown, _provider: AgentProvider): false {
-  // Both providers speak ACP, which converts a confirmed missing session before this boundary.
+export function isMissingProviderSessionError(error: unknown, provider: AgentProvider): boolean {
+  // ACP clients convert confirmed missing-session responses before this boundary.
+  // Provider diagnostics can mention missing resources without proving that this session is gone.
   if (error instanceof RequestError) return false;
-  return false;
+  if (provider !== "acp" || !(error instanceof Error)) return false;
+  return (
+    /\bsession\b.*\b(?:not found|does not exist|unknown)\b/i.test(error.message) ||
+    /\b(?:not found|unknown)\b.*\bsession\b/i.test(error.message)
+  );
 }
 
 export function isRequestTimeout(error: unknown, method: string): error is RequestTimeoutError {

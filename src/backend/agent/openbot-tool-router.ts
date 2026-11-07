@@ -769,7 +769,11 @@ export class OpenBotToolRouter {
     const executionThreadId = this.#conversation.publicThreadId(senderAgentId, params.threadId);
     // Any agent can post on its own initiative, such as a routine that reports to a Discord channel.
     if (MESSAGING_OUTBOUND_TOOLS.has(params.tool))
-      return yield* this.#messaging.outboundTool(params.tool, params.arguments);
+      return yield* this.#messaging.outboundTool(
+        params.tool,
+        params.arguments,
+        toolCallIdempotencyKey({ threadId: params.threadId, turnId: params.turnId, callId: params.callId }),
+      );
     if (params.tool.startsWith("messaging_")) {
       // Only the agent that answers a platform conversation, in that conversation's own thread.
       const link = this.#messaging.store.linkForThread(executionThreadId);

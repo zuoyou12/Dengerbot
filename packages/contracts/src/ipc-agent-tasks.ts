@@ -120,6 +120,12 @@ export interface StartAgentTaskInput {
   text: string;
   attachmentDraftIds?: string[];
   clientMessageId?: string;
+  /**
+   * Runs the task in its own git worktree of the agent's workspace, so its file work cannot touch
+   * the workspace the other tasks share. Local machines only: the frozen `agent-tasks-v1` routes
+   * refuse it.
+   */
+  isolatedWorktree?: boolean;
 }
 
 /** Moves a queued message of the agent's own chat into a new task. */

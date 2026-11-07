@@ -41,7 +41,9 @@ import { createDshRuntimeUpdater } from "./dsh-runtime-updater";
 import { filePreviewPages } from "./file-preview-pages";
 import { hostAllowsTenantLaunch } from "./host-update-coordinator";
 import { accountIpcHandlers } from "./ipc/account-handlers";
+import { acpRegistryIpcHandlers } from "./ipc/acp-registry-handlers";
 import { agentAdminIpcHandlers } from "./ipc/agent-admin-handlers";
+import { agentFolderIpcHandlers } from "./ipc/agent-folder-handlers";
 import { agentIpcHandlers } from "./ipc/agent-handlers";
 import { agentImportIpcHandlers } from "./ipc/agent-import-handlers";
 import { agentTemplateIpcHandlers } from "./ipc/agent-template-handlers";
@@ -53,6 +55,7 @@ import { browserIpcHandlers } from "./ipc/browser-handlers";
 import { channelMemoryIpcHandlers } from "./ipc/channel-memory-handlers";
 import { channelRoutineIpcHandlers } from "./ipc/channel-routine-handlers";
 import { computerUseIpcHandlers } from "./ipc/computer-use-handlers";
+import { customAgentIpcHandlers } from "./ipc/custom-agent-handlers";
 import { customProviderIpcHandlers } from "./ipc/custom-provider-handlers";
 import { registerIpcGroups } from "./ipc/define-ipc-group";
 import { dshRuntimeIpcHandlers } from "./ipc/dsh-runtime-handlers";
@@ -548,6 +551,9 @@ function registerIpcHandlers({
   events,
   customProviders,
   customProviderChanges,
+  customAgentChanges,
+  agentFolders,
+  acpRegistry,
   subscriptions,
   subscriptionModels,
   providerDetection,
@@ -651,6 +657,13 @@ function registerIpcHandlers({
     ...bitwardenConnectorIpcHandlers({ bitwardenConnector, remoteServers }),
     ...vaultIpcHandlers({ vault, getMainWindow: getDialogParent, translate: language.translate }),
     ...eventsIpcHandlers({ events, remoteServers }),
+    ...customAgentIpcHandlers(customAgentChanges),
+    ...agentFolderIpcHandlers({
+      folders: agentFolders,
+      getMainWindow: getDialogParent,
+      translate: language.translate,
+    }),
+    ...acpRegistryIpcHandlers(acpRegistry),
     ...customProviderIpcHandlers(customProviderChanges, () =>
       subscriptionModels
         .configs()

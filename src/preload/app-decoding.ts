@@ -21,9 +21,15 @@ import {
   type BitwardenConnectorStatus,
   type BusyMessageModePreference,
   type ChatWindowTarget,
+  CUSTOM_AGENT_LIMITS,
+  type CustomAgentCheckResult,
+  type CustomAgentResult,
+  type CustomAgentSummary,
+  type CustomAgentUsage,
   type CustomProviderResult,
   type CustomProviderSummary,
   DEFAULT_AGENT_DEFAULTS,
+  type DetectedAcpAgent,
   type DetectedModelServer,
   type DiscoverModelsResult,
   decodeExternalLinkTarget,
@@ -46,8 +52,13 @@ import {
   isAppLogoColor,
   isApprovalAutomationPreference,
   isBusyMessageMode,
+  isCustomAgentCheckResult,
+  isCustomAgentResult,
+  isCustomAgentSummary,
+  isCustomAgentUsage,
   isCustomProviderResult,
   isCustomProviderSummary,
+  isDetectedAcpAgent,
   isDetectedModelServer,
   isDiscoverModelsResult,
   isProviderDetectionSettings,
@@ -418,6 +429,42 @@ export function decodeDetectedModelServers(value: unknown): DetectedModelServer[
   if (!Array.isArray(value) || !value.every(isDetectedModelServer)) {
     throw new Error("Invalid model server list response.");
   }
+  return value;
+}
+
+/** Fails closed on the whole list: a scan row never carries an environment value. */
+export function decodeDetectedAcpAgents(value: unknown): DetectedAcpAgent[] {
+  if (!Array.isArray(value) || !value.every(isDetectedAcpAgent)) {
+    throw new Error("Invalid agent list response.");
+  }
+  return value;
+}
+
+/**
+ * The guard, as for the endpoints: it is the assertion that a summary carries no environment value,
+ * and it fails closed on the whole list.
+ */
+export function decodeCustomAgents(value: unknown): CustomAgentSummary[] {
+  if (!Array.isArray(value) || !value.every(isCustomAgentSummary)) {
+    throw new Error("Invalid custom agent list response.");
+  }
+  return value;
+}
+
+export function decodeCustomAgentResult(value: unknown): CustomAgentResult {
+  if (!isCustomAgentResult(value)) throw new Error("Invalid custom agent response.");
+  return value;
+}
+
+export function decodeCustomAgentUsage(value: unknown): CustomAgentUsage[] {
+  if (!Array.isArray(value) || value.length > CUSTOM_AGENT_LIMITS.agents || !value.every(isCustomAgentUsage)) {
+    throw new Error("Invalid custom agent usage response.");
+  }
+  return value;
+}
+
+export function decodeCustomAgentCheckResult(value: unknown): CustomAgentCheckResult {
+  if (!isCustomAgentCheckResult(value)) throw new Error("Invalid agent check response.");
   return value;
 }
 

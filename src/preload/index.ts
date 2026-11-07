@@ -1,4 +1,8 @@
 import {
+  type AgentExclusionChange,
+  type AgentFolderBrowse,
+  type AgentFolderChange,
+  type AgentFolderList,
   type AgentIpcRequest,
   type AttachmentImportEvent,
   decodeAgentAccessSnapshot,
@@ -39,6 +43,10 @@ import {
   decodeOptionalStorageDisk,
   decodeOptionalStorageUsage,
   decodePromptCacheTtlSetting,
+  decodeRegistryEntries,
+  decodeRegistryInstallations,
+  decodeRegistryInstallResult,
+  decodeRegistryOperations,
   decodeSaveAgentProfileResult,
   decodeWorkspaceDirectory,
   type EventEndpoint,
@@ -47,6 +55,10 @@ import {
   type ImportAttachmentsInput,
   IPC_ENDPOINTS,
   type IpcEndpointGroup,
+  isAgentExclusionChange,
+  isAgentFolderBrowse,
+  isAgentFolderChange,
+  isAgentFolderList,
   LOCAL_SERVER_ID,
   type OpenBotDesktopApi,
   type RequestEndpoint,
@@ -63,6 +75,7 @@ import {
   decodeWebhookSecret,
   decodeWebhookTestResult,
 } from "@openbot/contracts/ipc-events";
+import { isDynamicRecord } from "@openbot/contracts/runtime-values";
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import {
   decodeAccountUsageFromMain,
@@ -112,8 +125,13 @@ import {
   decodeBitwardenConnectorStatus,
   decodeBusyMessageModePreference,
   decodeChatWindowTargets,
+  decodeCustomAgentCheckResult,
+  decodeCustomAgentResult,
+  decodeCustomAgents,
+  decodeCustomAgentUsage,
   decodeCustomProviderResult,
   decodeCustomProviders,
+  decodeDetectedAcpAgents,
   decodeDetectedModelServers,
   decodeDiscoverModelsResult,
   decodeDshAccountSignInState,
@@ -488,6 +506,7 @@ const agentGroup = bridgeGroup(IPC_ENDPOINTS.agent, {
   searchConversationFiles: decodeConversationFileSearchPage,
   listConversationReads: decodeReadStates,
   markConversationRead: decodeReadState,
+  markConversationUnread: decodeReadState,
   sendMessage: decodeReceipt,
   setMessageReaction: decodeVoid,
   listQueue: decodeQueue,
@@ -497,6 +516,7 @@ const agentGroup = bridgeGroup(IPC_ENDPOINTS.agent, {
   readTask: decodeTaskConversation,
   startTask: decodeAgentTask,
   runQueuedMessageAsTask: decodeAgentTask,
+  branchTask: decodeAgentTask,
   stopTask: decodeVoid,
   closeTask: decodeVoid,
   reopenTask: decodeVoid,
@@ -559,6 +579,39 @@ function selectJoinedServer(server: ServerSummary): ServerSummary {
   selectedServerId = server.id;
   return server;
 }
+
+// The folder answers, read with the same guards the main process wrote them with.
+function decodeAgentFolderListFromMain(value: unknown): AgentFolderList {
+  if (!isAgentFolderList(value)) throw new Error("Invalid agent folder list.");
+  return value;
+}
+
+function decodeAgentFolderBrowseFromMain(value: unknown): AgentFolderBrowse {
+  if (!isAgentFolderBrowse(value)) throw new Error("Invalid agent folder browse.");
+  return value;
+}
+
+function decodeAgentFolderChangeFromMain(value: unknown): AgentFolderChange {
+  if (!isDynamicRecord(value) || !isAgentFolderChange(value)) throw new Error("Invalid agent folder change.");
+  return value;
+}
+
+function decodeAgentExclusionChangeFromMain(value: unknown): AgentExclusionChange {
+  if (!isDynamicRecord(value) || !isAgentExclusionChange(value)) throw new Error("Invalid agent folder change.");
+  return value;
+}
+
+// Bridged apart from the API object, because a dropped folder with no path reads the list.
+const agentFoldersGroup = bridgeGroup(IPC_ENDPOINTS.agentFolders, {
+  listAgentFolders: decodeAgentFolderListFromMain,
+  chooseAgentFolder: decodeAgentFolderChangeFromMain,
+  addAgentFolder: decodeAgentFolderChangeFromMain,
+  removeAgentFolder: decodeAgentFolderChangeFromMain,
+  chooseAgentExclusion: decodeAgentExclusionChangeFromMain,
+  addAgentExclusion: decodeAgentExclusionChangeFromMain,
+  removeAgentExclusion: decodeAgentExclusionChangeFromMain,
+  browseAgentFolders: decodeAgentFolderBrowseFromMain,
+});
 
 const openbotApi: OpenBotDesktopApi = {
   ...bridgeGroup(IPC_ENDPOINTS.app, {
@@ -827,8 +880,24 @@ const openbotApi: OpenBotDesktopApi = {
     delete: decodeCustomProviderResult,
     update: decodeCustomProviderResult,
   }),
+  acpRegistry: bridgeGroup(IPC_ENDPOINTS.acpRegistry, {
+    search: decodeRegistryEntries,
+    installed: decodeRegistryInstallations,
+    status: decodeRegistryOperations,
+    install: decodeRegistryInstallResult,
+    cancel: decodeVoid,
+    remove: decodeVoid,
+  }),
+  customAgents: bridgeGroup(IPC_ENDPOINTS.customAgents, {
+    list: decodeCustomAgents,
+    save: decodeCustomAgentResult,
+    delete: decodeCustomAgentResult,
+    check: decodeCustomAgentCheckResult,
+    usage: decodeCustomAgentUsage,
+  }),
   providerDetection: bridgeGroup(IPC_ENDPOINTS.providerDetection, {
     scanModelServers: decodeDetectedModelServers,
+    scanAgents: decodeDetectedAcpAgents,
     discoverModels: decodeDiscoverModelsResult,
     getSettings: decodeProviderDetectionSettings,
     setSettings: decodeProviderDetectionSettings,
@@ -1012,6 +1081,20 @@ const openbotApi: OpenBotDesktopApi = {
       releaseFilePreview: decodeVoid,
       listWorkspaceDirectory: decodeWorkspaceDirectory,
     }),
+    ...agentFoldersGroup,
+    // The page gets the folder, not its path, as for a dropped attachment.
+    addDroppedAgentFolder: async (agentId, folder) => {
+      const path = webUtils.getPathForFile(folder);
+      // An item from another app, with no path here: the page says that it is not a folder on this computer.
+      if (!path)
+        return {
+          outcome: "refused",
+          path: folder.name,
+          refusal: "missing",
+          list: await agentFoldersGroup.listAgentFolders(agentId),
+        };
+      return agentFoldersGroup.addAgentFolder({ agentId, path });
+    },
     onAttachmentImport: (listener) => {
       attachmentImportListeners.add(listener);
       return () => attachmentImportListeners.delete(listener);

@@ -17,13 +17,13 @@ import { lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { agentProviderDescriptor } from "@openbot/contracts/agent-providers";
 import { createOpenBotLogger, toLogValue } from "@openbot/logging";
 import { type Browser, chromium, type Page } from "playwright-core";
 import { developmentInstanceIdForWorktree, developmentUserDataName } from "../../src/main/development-profile";
 import { resolveDevelopmentAppDataRoot } from "../development-state-paths";
 import { readScriptArguments } from "../script-arguments";
 import { cleanupSeedOwnedTransfers, seedDevelopmentState } from "../seed-dev-state";
-import { ensureBenchAuthApi, signInBenchAccount } from "./bench-auth";
 import { type BenchApp, launchBenchApp } from "./bench-launch";
 import { SCENARIOS, type Scenario, SECOND, type SeedPlan } from "./bench-scenarios";
 import {
@@ -46,7 +46,11 @@ import { ResourceSampler } from "./resource-sampler";
 const logger = createOpenBotLogger("dev-bench", (line) => process.stderr.write(`${line}\n`), "info");
 
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const BENCH_ROOT = join(PROJECT_ROOT, ".openbot-build", "dev-automation", "bench");
+// Everything the bench writes: reports, logs, snapshots and its isolated home. `DENGERBOT_BENCH_OUTPUT_DIR`
+// moves it all outside the source tree, which is where a measured run belongs.
+const BENCH_ROOT = process.env.DENGERBOT_BENCH_OUTPUT_DIR
+  ? resolve(process.env.DENGERBOT_BENCH_OUTPUT_DIR)
+  : join(PROJECT_ROOT, ".openbot-build", "dev-automation", "bench");
 const READY_TIMEOUT_MS = 90_000;
 // The signed-in session, encrypted with the OS keychain. A reseed keeps it, so
 // each run opens the workspace the way a returning user does, without a new
@@ -57,9 +61,14 @@ const CENTRAL_AUTH_FILE = "openbot-central-auth-v1.bin";
 // isolated dev profile of this worktree.
 const INSTANCE_ID = developmentInstanceIdForWorktree(`${PROJECT_ROOT}#bench`);
 
-// Seeded agents run on Claude: the bench never starts Codex, and a turn
-// scenario switches the agent to the provider it measures.
-const BENCH_AGENT_MODEL = { provider: "deepseek", model: "claude-sonnet-5", reasoningEffort: "low" } as const;
+// Seeded agents run on the provider's own default model, read from the provider descriptor: a
+// descriptor change moves the bench with it, instead of naming a model that has left the catalog.
+// The bench never starts Codex, and a turn scenario switches the agent to the provider it measures.
+const BENCH_AGENT_MODEL = {
+  provider: "deepseek",
+  model: agentProviderDescriptor("deepseek").defaultModel,
+  reasoningEffort: "low",
+} as const;
 
 // How long `--cpu-profile` records the app window once a scenario has settled.
 const CPU_PROFILE_MS = 15 * SECOND;
@@ -85,13 +94,29 @@ async function prepareProfile(plan: SeedPlan): Promise<void> {
   await writeFile(authPath, session, { mode: 0o600 });
 }
 
+/**
+ * The home and the agent data root the bench's own process tree sees. Both live under the bench
+ * root: a child that resolves `DENGERBOT_HOME` must never reach the developer's own OpenBot state,
+ * and the seed reads its migration sources from the simulated home, not from the real one.
+ */
+function benchAppEnvironment(): Record<string, string> {
+  return { DENGERBOT_HOME: join(BENCH_ROOT, "agent-data") };
+}
+
+/** The home the seed may read: under the bench root, never the developer's own. */
+function benchSimulatedHome(): string {
+  return join(BENCH_ROOT, "home");
+}
+
 async function replaceProfile(plan: SeedPlan): Promise<void> {
   const { appDataRoot, profile } = benchProfilePath();
   if (plan.kind === "seed") {
+    await mkdir(benchSimulatedHome(), { recursive: true, mode: 0o700 });
     await seedDevelopmentState({
       appDataRoot,
       instanceId: INSTANCE_ID,
       agentModel: BENCH_AGENT_MODEL,
+      homeDirectory: benchSimulatedHome(),
       scale: plan.scale,
     });
     return;
@@ -132,7 +157,7 @@ async function findAppPage(browser: Browser): Promise<Page | null> {
   return null;
 }
 
-async function connect(app: BenchApp): Promise<{ browser: Browser; page: Page }> {
+async function connect(app: BenchApp, plan: SeedPlan): Promise<{ browser: Browser; page: Page }> {
   await waitFor("the CDP port", READY_TIMEOUT_MS, async () => {
     const response = await fetch(`http://127.0.0.1:${app.remoteDebuggingPort}/json/version`);
     return response.ok ? true : null;
@@ -143,12 +168,14 @@ async function connect(app: BenchApp): Promise<{ browser: Browser; page: Page }>
     throw new Error(`The browser on :${app.remoteDebuggingPort} is not the bench app this run started.`);
   }
   const page = await waitFor("the app window", READY_TIMEOUT_MS, () => findAppPage(browser));
-  // Ready means the backend answers, not only that the window painted.
+  // Ready means the backend answers, not only that the window painted. A seeded profile opens its
+  // workspace, and the workspace, not the sign-in or connecting screen, is what a run measures. An
+  // empty profile stops at the setup page, which is the ready state it has: the window with the
+  // preload bridge is all an empty run waits for.
+  if (plan.kind !== "seed") return { browser, page };
   const agentCount = await waitFor("the agent list", READY_TIMEOUT_MS, () =>
     page.evaluate<number>("window.openbot.agent.listAgents().then((agents) => agents.length)"),
   );
-  await signInBenchAccount(page, logger);
-  // The workspace, not the sign-in or connecting screen, is what a run measures.
   if (agentCount > 0) {
     await page.locator("[data-chat-id]").first().waitFor({ state: "attached", timeout: READY_TIMEOUT_MS });
   }
@@ -210,7 +237,6 @@ async function writeCpuProfile(browser: Browser, page: Page, path: string): Prom
 
 interface RunOptions {
   label: string;
-  authApiUrl: string;
   cpuProfile: boolean;
   frames: boolean;
   callCounts: boolean;
@@ -219,7 +245,7 @@ interface RunOptions {
 async function runOnce(
   scenario: Scenario,
   index: number,
-  { label, authApiUrl, cpuProfile, frames, callCounts }: RunOptions,
+  { label, cpuProfile, frames, callCounts }: RunOptions,
 ): Promise<RunResult> {
   await prepareProfile(scenario.seed);
   const spawnedAt = Date.now();
@@ -227,7 +253,7 @@ async function runOnce(
     projectRoot: PROJECT_ROOT,
     instanceId: INSTANCE_ID,
     logger,
-    environment: { OPENBOT_AUTH_API_URL: authApiUrl },
+    environment: benchAppEnvironment(),
     logPath: join(BENCH_ROOT, "logs", `${label}-${scenario.id}-${index + 1}.log`),
   });
   let browser: Browser | null = null;
@@ -242,7 +268,7 @@ async function runOnce(
   });
   sampler.start();
   try {
-    const connected = await connect(app);
+    const connected = await connect(app, scenario.seed);
     browser = connected.browser;
     page = connected.page;
     const readyMs = Date.now() - spawnedAt;
@@ -376,35 +402,28 @@ async function main(): Promise<void> {
   });
   await mkdir(BENCH_ROOT, { recursive: true });
   const jsonPath = join(BENCH_ROOT, `${label}.json`);
-  const authApi = await ensureBenchAuthApi(PROJECT_ROOT, BENCH_ROOT, logger);
   // A long `all` run continues past a scenario that fails, and names it at the end.
   const failed: string[] = [];
-  try {
-    for (const scenario of selectScenarios(selector)) {
-      const results: RunResult[] = [];
-      try {
-        for (let index = 0; index < runs; index += 1) {
-          logger.info(`${scenario.id}: run ${index + 1} of ${runs}`);
-          results.push(
-            await runOnce(scenario, index, { label, authApiUrl: authApi.url, cpuProfile, frames, callCounts }),
-          );
-        }
-      } catch (error) {
-        logger.error(`${scenario.id} failed: ${error instanceof Error ? error.message : String(error)}`);
-        failed.push(scenario.id);
-        continue;
+  for (const scenario of selectScenarios(selector)) {
+    const results: RunResult[] = [];
+    try {
+      for (let index = 0; index < runs; index += 1) {
+        logger.info(`${scenario.id}: run ${index + 1} of ${runs}`);
+        results.push(await runOnce(scenario, index, { label, cpuProfile, frames, callCounts }));
       }
-      scenarios.push({
-        scenario: scenario.id,
-        description: scenario.description,
-        runs: results,
-        metrics: summarizeRuns(results),
-      });
-      // After each scenario, so a long `all` run that fails late keeps what it measured.
-      await writeFile(jsonPath, `${JSON.stringify(report(), null, 2)}\n`);
+    } catch (error) {
+      logger.error(`${scenario.id} failed: ${error instanceof Error ? error.message : String(error)}`);
+      failed.push(scenario.id);
+      continue;
     }
-  } finally {
-    await authApi.stop();
+    scenarios.push({
+      scenario: scenario.id,
+      description: scenario.description,
+      runs: results,
+      metrics: summarizeRuns(results),
+    });
+    // After each scenario, so a long `all` run that fails late keeps what it measured.
+    await writeFile(jsonPath, `${JSON.stringify(report(), null, 2)}\n`);
   }
   const markdown = renderReport(report());
   await writeFile(join(BENCH_ROOT, `${label}.md`), `${markdown}\n`);

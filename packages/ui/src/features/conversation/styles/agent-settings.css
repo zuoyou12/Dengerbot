@@ -632,53 +632,12 @@
   height: var(--openbot-icon-sm);
 }
 
-.agent-memories-add-button {
-  color: var(--openbot-text-secondary);
-}
-
 .agent-memories-body {
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   padding: var(--openbot-space-2);
-}
-
-.agent-memory-composer {
-  display: grid;
-  gap: var(--openbot-space-2);
-  margin: 0 0 var(--openbot-space-3);
-  padding: var(--openbot-space-1) var(--openbot-space-1) 0;
-}
-
-.agent-memory-input {
-  min-height: 64px;
-  resize: none;
-  border-color: var(--openbot-border);
-  background: transparent;
-}
-
-.agent-memory-input:focus-visible {
-  border-color: var(--openbot-border-strong);
-  outline: 0;
-  box-shadow: none;
-}
-
-.agent-memory-composer-actions,
-.agent-memory-editor-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--openbot-space-1);
-}
-
-.agent-memory-inclusion-actions {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--openbot-space-1);
 }
 
 .agent-memory-list {
@@ -762,19 +721,6 @@
   align-items: center;
   justify-self: center;
   color: var(--openbot-text-muted);
-}
-
-.agent-memory-editor {
-  grid-column: 1 / -1;
-  display: grid;
-  gap: var(--openbot-space-2);
-  background: transparent;
-  padding: var(--openbot-space-1) var(--openbot-space-1) var(--openbot-space-2);
-}
-
-.agent-memory-row:has(.agent-memory-editor),
-.agent-memory-row:has(.agent-memory-editor):hover {
-  background: transparent;
 }
 
 .agent-memory-state,
@@ -1059,13 +1005,6 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--openbot-space-1);
-}
-
-.agent-memories-footer {
-  display: flex;
-  min-height: 48px;
-  align-items: center;
-  padding: var(--openbot-space-2) var(--openbot-space-3) var(--openbot-space-3);
 }
 
 .agent-skill-empty {

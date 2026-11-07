@@ -11,6 +11,8 @@ export const messages = {
   "dialog.filter.attachment": "附件",
   "dialog.filter.zipArchive": "ZIP 压缩包",
   "dialog.filter.jsonDocument": "JSON 文档",
+  "dialog.chooseAgentFolder": "为 {agent} 选择文件夹",
+  "dialog.chooseAgentExclusion": "选择 {agent} 不得更改的文件夹",
   "dialog.chooseAgentExport": "选择助手导出文件",
   "dialog.chooseHermesFolder": "选择 Hermes 文件夹",
   "dialog.filter.agentExports": "助手导出文件",

@@ -25,7 +25,7 @@ import type { BrowserProfileCalls } from "../browser/browser-profiles-port";
 import { createBrowserProfilesStore } from "../browser/stores/browser-profiles-store";
 import { type AgentFilesOptions, AgentFilesSettings } from "../files/AgentFilesSettings";
 import { createStorageUsage } from "../files/storage-usage";
-import { AgentMemoriesModal } from "./AgentMemoriesModal";
+import { AgentMemoriesSettings } from "./AgentMemoriesSettings";
 import { AgentRoutinesSettings, type RoutineSelectionRequest } from "./AgentRoutinesSettings";
 import { AgentSkillsModal, type AgentSkillsMode, assignedSkillCount, type SkillDetail } from "./AgentSkillsModal";
 import { conversationPort, type SharedTableCalls } from "./conversation-port";
@@ -498,14 +498,15 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           }
         />
       </Show>
-      <AgentMemoriesModal
+      <AgentMemoriesSettings
         port={memoriesPort()}
         open={draft.memories.open}
-        onOpenChange={(open) =>
+        onBack={() =>
           setDraft((state) => {
-            state.memories.open = open;
+            state.memories.open = false;
           })
         }
+        onClose={props.onClose}
         onCountChange={(count) =>
           setDraft((state) => {
             state.memories.count = count;

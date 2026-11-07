@@ -18,6 +18,14 @@ import type { ProviderConnection } from "@openbot/ui/components/ProviderPicker";
 import type { ProviderAccountActions } from "@openbot/ui/components/provider-accounts";
 import { connectedCustomProviders } from "@openbot/ui/components/provider-model-options";
 import type { AccountUsageProviderRow } from "@openbot/ui/features/account/account-usage-view";
+import {
+  AcpRegistrySettings,
+  type AcpRegistrySettingsApi,
+} from "@openbot/ui/features/custom-providers/AcpRegistrySettings";
+import {
+  CustomAgentSettings,
+  type CustomAgentSettingsApi,
+} from "@openbot/ui/features/custom-providers/CustomAgentSettings";
 import { CustomProviderDialog } from "@openbot/ui/features/custom-providers/CustomProviderDialog";
 import { savedCustomProviderDraft } from "@openbot/ui/features/custom-providers/custom-provider-form";
 import {
@@ -74,6 +82,9 @@ interface ProviderSettingsSectionProps {
   connection?: ProviderConnection | undefined;
   /** Adds, names and removes the accounts of each provider that can hold more than one. */
   accountActions?: ProviderAccountActions | undefined;
+  /** The user's own ACP agents. This computer only, so a joined server's section never has it. */
+  customAgents?: CustomAgentSettingsApi | undefined;
+  acpRegistry?: AcpRegistrySettingsApi | undefined;
   usage?: readonly AccountUsageProviderRow[] | undefined;
   onDetailChange?: ((detail: ProviderSettingsDetail | null) => void) | undefined;
   promptCache?: ProviderPromptCache | undefined;
@@ -226,6 +237,14 @@ function ProviderSettingsSection(props: ProviderSettingsSectionProps) {
         menuMount={props.selectMount}
         onDetailChange={props.onDetailChange}
         promptCache={props.promptCache}
+        footer={
+          <>
+            <Show when={props.acpRegistry} keyed>
+              {(api) => <AcpRegistrySettings api={api} />}
+            </Show>
+            <Show when={props.customAgents}>{(api) => <CustomAgentSettings api={api()} />}</Show>
+          </>
+        }
       />
       <DshRuntimeSection />
       <Show when={saving.error}>
@@ -368,6 +387,9 @@ export interface HostProviderSettings {
   /** The scan is of this computer, so a joined server's section shows no found list. */
   /** Called each time the section is shown, for the scan of this computer. */
   onShown?: (() => void) | undefined;
+  /** The user's own ACP agents and the registry that installs them. This computer only. */
+  customAgents?: CustomAgentSettingsApi | undefined;
+  acpRegistry?: AcpRegistrySettingsApi | undefined;
   /** The usage readings of each account, for the badge of an account that is low. */
   usage?: readonly AccountUsageProviderRow[] | undefined;
 }
@@ -436,6 +458,8 @@ export function HostProviderSettingsPanel(
         onDeleteCustomProvider={props.onDeleteCustomProvider}
         onUpdateCustomProvider={props.onUpdateCustomProvider}
         accountActions={props.accountActions}
+        customAgents={props.customAgents}
+        acpRegistry={props.acpRegistry}
         onSignInProvider={props.providerKeys ? keys.openKeyDialog : undefined}
         usage={props.usage}
         onDetailChange={props.onDetailChange}

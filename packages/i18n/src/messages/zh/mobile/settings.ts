@@ -153,4 +153,7 @@ export const messages = {
   "mobile.settings.profile.signOutTitle": "退出登录？",
   "mobile.settings.profile.signOutBody": "你可通过扫描桌面端 Dengerbot 生成的新二维码重新连接。",
   "mobile.settings.profile.signOut": "退出登录",
+  "mobile.settings.profile.pairedIdentity": "本手机已登录到你的电脑。名称与头像保存在电脑端，只能在桌面端修改。",
+  "mobile.settings.sessions.pairedNote":
+    "本手机通过配对登录到你的电脑，不保存自己的账号会话。已连接的设备请在桌面端查看。",
 } as const satisfies PartialTranslation<typeof source>;

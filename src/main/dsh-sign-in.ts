@@ -9,6 +9,11 @@
 // Everything the process prints is discarded: the sign-in URL carries tokens, and no log anywhere
 // may keep them. Completion is read from the bridge handoff file, which the account bridge rewrites
 // when the account changes; this service polls it and closes the window once it reports signed in.
+//
+// Every start and every stop bumps a generation counter, and each poll timer and each process event
+// carries the generation it belongs to: a duplicate start merges into the window that is already
+// resolving instead of spawning a second one, a stop invalidates the start that has not finished,
+// and an old process's exit or error never reaches the state of a newer start.
 
 import { type ChildProcess, spawn } from "node:child_process";
 import type { DshAccountSignInPhase } from "@openbot/contracts/dsh-account";
@@ -36,6 +41,8 @@ export class DshSignInService {
   #child: ChildProcess | null = null;
   #pollTimer: NodeJS.Timeout | null = null;
   #phase: DshAccountSignInPhase = "idle";
+  /** Bumped by every start and every stop. A stale poll or process event owns nothing. */
+  #generation = 0;
 
   constructor(options: DshSignInServiceOptions) {
     this.#options = options;
@@ -46,8 +53,16 @@ export class DshSignInService {
   }
 
   startSignIn(): void {
-    if (this.#child) return;
+    const generation = ++this.#generation;
+    if (this.#child) {
+      // A sign-in window is already resolving: a second start merges into it instead of opening a
+      // second window, and what it reports is what the newer start asked for.
+      this.#setPhase("signing-in");
+      this.#startPolling(generation);
+      return;
+    }
     const command = this.#options.dshSpawn();
+    if (generation !== this.#generation) return; // A stop or a newer start owns the state now.
     if (!command || !this.#options.dshHome) {
       this.#setPhase("failed");
       this.#options.log?.("The DeepSeek sign-in could not start: no usable DSH installation.");
@@ -59,36 +74,60 @@ export class DshSignInService {
     // closes this window again.
     installDshAccountBridge(this.#options.dshHome, "web");
     // stdio "ignore" is the whole point: the sign-in URL carries tokens and never enters a log.
-    const child = spawn(command.executable, [command.entry, "--profile", "web"], {
-      env: { ...process.env, DSH_HOME: this.#options.dshHome },
-      stdio: "ignore",
-      windowsHide: true,
-    });
+    let child: ChildProcess;
+    try {
+      child = spawn(command.executable, [command.entry, "--profile", "web"], {
+        env: { ...process.env, DSH_HOME: this.#options.dshHome },
+        stdio: "ignore",
+        windowsHide: true,
+      });
+    } catch {
+      if (generation !== this.#generation) return;
+      this.#setPhase("failed");
+      this.#options.log?.("The DeepSeek sign-in window could not start.");
+      return;
+    }
     this.#child = child;
     child.once("exit", () => {
-      if (this.#child !== child) return;
+      // An old process may only update itself: a stop or a newer start owns the state now.
+      if (this.#child !== child || generation !== this.#generation) return;
       this.#child = null;
       this.#stopPolling();
       if (this.#phase === "signing-in") this.#setPhase("failed");
     });
-    this.#pollTimer = setInterval(() => {
-      if (this.#options.isSignedIn()) {
-        this.#setPhase("signed-in");
-        this.#close();
-      }
-    }, SIGN_IN_POLL_MS);
+    child.once("error", () => {
+      if (this.#child !== child || generation !== this.#generation) return;
+      this.#child = null;
+      this.#stopPolling();
+      this.#setPhase("failed");
+    });
+    this.#startPolling(generation);
     this.#options.log?.("Opened the DeepSeek account sign-in window.");
   }
 
   cancelSignIn(): void {
     if (!this.#child && this.#phase === "idle") return;
+    this.#generation += 1;
     this.#close();
     this.#setPhase("idle");
   }
 
   stop(): void {
+    this.#generation += 1;
     this.#close();
     this.#setPhase("idle");
+  }
+
+  #startPolling(generation: number): void {
+    this.#stopPolling();
+    this.#pollTimer = setInterval(() => {
+      // An old poll never clears a newer start's state.
+      if (generation !== this.#generation) return;
+      if (this.#options.isSignedIn()) {
+        this.#setPhase("signed-in");
+        this.#close();
+      }
+    }, SIGN_IN_POLL_MS);
   }
 
   #close(): void {
@@ -99,6 +138,7 @@ export class DshSignInService {
     // A window the user never finished is a child process, not a service: killing it is safe, and
     // its "exit" handler must not flip the phase afterwards.
     child.removeAllListeners("exit");
+    child.removeAllListeners("error");
     child.kill();
   }
 

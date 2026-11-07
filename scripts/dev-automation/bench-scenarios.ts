@@ -404,16 +404,14 @@ export const SCENARIOS: Scenario[] = [
     },
     snapshots: true,
   },
-  streaming("deepseek"),
-  streaming("deepseek"),
+  // One row per unique scenario: a repeated row measured the same run twice and doubled its weight
+  // in the medians without adding information.
   streaming("deepseek"),
   parallel("deepseek", 3),
   parallel("deepseek", 5),
-  parallel("deepseek", 5),
-  parallel("deepseek", 5),
   {
-    id: "s7-release-claude",
-    description: "5 claude agents run one turn each, then idle 11 min (the idle release is 10 min)",
+    id: "s7-release-deepseek",
+    description: "5 deepseek agents run one turn each, then idle 11 min (the idle release is 10 min)",
     seed: scaled("agents:5,messages:20"),
     act: async (context) => {
       const agents = Array.from({ length: 5 }, (_, index) => scaleAgent(index + 1));

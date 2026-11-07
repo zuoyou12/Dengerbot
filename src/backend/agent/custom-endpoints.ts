@@ -3,6 +3,7 @@ import {
   CUSTOM_AGENT_DEFAULT_MODEL,
   customAgentIdOfModel,
   defaultProviderModel,
+  PICKER_PROVIDERS,
   parseCustomModelId,
 } from "@openbot/contracts/ipc";
 import { sourceText } from "@openbot/i18n/source";
@@ -96,9 +97,7 @@ export class CustomEndpoints {
   available(): AgentModelOption[] {
     if (this.#released.size === 0) return this.#providers.listModels();
     // A custom agent id can be the same text as an endpoint id. Its models are not the endpoint's.
-    return this.#providers
-      .listModels()
-      .filter((option) => (option.provider as string) === "acp" || this.serves(option.id));
+    return this.#providers.listModels().filter((option) => option.provider === "acp" || this.serves(option.id));
   }
 
   /**
@@ -294,6 +293,78 @@ export class CustomEndpoints {
   }, Effect.uninterruptible);
 
   /**
+   * Saves one custom agent: `persist`, the caller's file write, inside the chain. No agent moves: an
+   * agent on a model the changed agent no longer lists moves to another model of the same agent when
+   * the new process lists its models (`moveAgentsOffUnlistedModels`).
+   */
+
+  readonly saveCustomAgent = Effect.fn("CustomEndpoints.saveCustomAgent")(function* <T>(
+    this: CustomEndpoints,
+    persist: () => Effect.Effect<T, EndpointChangeFailed>,
+  ) {
+    return yield* this.#chain.withPermit(
+      Effect.gen({ self: this }, function* () {
+        yield* this.#hooks.stopProfileClients();
+        return yield* Effect.suspend(persist);
+      }),
+    );
+  }, Effect.uninterruptible);
+
+  /**
+   * Removes one custom agent: the agents on it move to another provider, then `persist` writes the
+   * file. The move comes first, as for an endpoint, so no agent is left on a program that is gone.
+   * With nothing to move to, the removal still goes ahead, and those agents ask for a model at their
+   * next turn.
+   */
+
+  readonly removeCustomAgent = Effect.fn("CustomEndpoints.removeCustomAgent")(function* <T>(
+    this: CustomEndpoints,
+    customAgentId: string,
+    persist: () => Effect.Effect<T, EndpointChangeFailed>,
+  ) {
+    return yield* this.#chain.withPermit(
+      Effect.gen({ self: this }, function* () {
+        yield* this.#hooks.stopProfileClients();
+        const affected = this.#store
+          .list()
+          .filter((agent) => providerForAgent(agent) === "acp" && customAgentIdOfModel(agent.model) === customAgentId);
+        const fallback = affected.length > 0 ? this.#builtInFallback() : null;
+        if (fallback) {
+          if (affected.some((agent) => this.#hasWorkInFlight(agent))) {
+            return yield* new EndpointChangeFailed({
+              cause: new Error(sourceText("error.provider.customAgentRemoveBusy")),
+            });
+          }
+          for (const agent of affected) {
+            yield* this.#hooks
+              .applyAgentUpdate({
+                agentId: agent.id,
+                provider: fallback.provider,
+                model: fallback.id,
+                reasoningEffort: fallback.defaultReasoningEffort,
+              })
+              .pipe(toEndpointChangeFailed);
+          }
+        }
+        return yield* Effect.suspend(persist);
+      }),
+    );
+  }, Effect.uninterruptible);
+
+  /** The model an agent moves to when its custom agent goes: the preferred provider's, then the others'. */
+  #builtInFallback(): AgentModelOption | null {
+    const remaining = this.available();
+    const preference = this.#hooks.preference();
+    const providers = [preference.provider, ...PICKER_PROVIDERS.filter((provider) => provider !== preference.provider)];
+    for (const provider of providers) {
+      if (provider === "acp" || !this.#hooks.providerAvailable(provider)) continue;
+      const model = startingModel(provider, remaining, preference);
+      if (model) return model;
+    }
+    return null;
+  }
+
+  /**
    * A fresh OpenCode process is the one the app uses now, and it read the endpoint files as they are,
    * so what it lists is the truth and nothing has to be masked any more.
    *
@@ -391,10 +462,10 @@ export class CustomEndpoints {
       // the same custom agent. One that listed nothing, or did not answer, keeps its model. The router
       // lists `<agent>/default` for an agent that answered with an empty list, which a slow start
       // gives too, so that model is no proof that the saved one is gone.
-      const variant = (provider as string) === "acp" ? null : effortVariant(models, agent.model);
+      const variant = provider === "acp" ? null : effortVariant(models, agent.model);
       const fallback =
         variant?.model ??
-        ((provider as string) === "acp"
+        (provider === "acp"
           ? models.find((model) => sameCustomAgent(model.id, agent.model) && !isCustomAgentDefaultModel(model.id))
           : providerFallback);
       if (!fallback) continue;

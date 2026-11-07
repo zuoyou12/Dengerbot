@@ -97,6 +97,7 @@ import {
   builtInAvatarImage,
   matchBuiltInAvatar,
 } from "../agents/built-in-avatars";
+import { type AgentFolderCalls, AgentFoldersPage, AgentFoldersRow, createAgentFolders } from "./AgentFolders";
 import { AgentNewChatDialog } from "./AgentNewChatDialog";
 import { BackupModelsPage } from "./BackupModels";
 
@@ -137,6 +138,8 @@ export interface AgentSettingsPanelProps {
   taskLimitEditable?: boolean;
   /** Backup models are local-only too: the Team API does not carry them. */
   backupModelsEditable?: boolean;
+  /** The folders the agent can change besides its workspace. Local-only: the Team API does not carry them. */
+  folders?: AgentFolderCalls | undefined;
   /** Whether a usage limit holds this model and account now, for the backup models page. */
   usageLimited?: ((choice: AgentModelChoice) => boolean) | undefined;
   /** The app default an agent without its own busy-message setting follows. */
@@ -205,10 +208,11 @@ const INSTRUCTIONS_SAVE_DELAY_MS = 400;
  * The pages behind the root list. The root edits the agent's face, name, title and instructions
  * in place, as the mobile app does, and shows one row for each page.
  */
-type AgentSettingsPage = "permissions" | "backup-models" | "advanced";
+type AgentSettingsPage = "permissions" | "folders" | "backup-models" | "advanced";
 
 const PAGE_TITLE: Record<AgentSettingsPage, AppTextKey> = {
   permissions: "agentSettings.permissions.title",
+  folders: "agentSettings.folders.title",
   "backup-models": "agentSettings.backupModels.title",
   advanced: "agentSettings.advanced.title",
 };
@@ -313,6 +317,42 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
       });
     },
   );
+  function folderSource() {
+    const calls = props.folders;
+    return calls ? { agentId: props.agent.id, agentName: props.agent.name, calls } : undefined;
+  }
+  const agentFolders = createAgentFolders(folderSource);
+  // Each activity of the agent gives a new agent object, so the list loads again only when the
+  // agent, its saved or excluded folders or the page change. The page opening reads which folders
+  // are gone.
+  const folderLoadKey = createMemo(() =>
+    props.folders
+      ? [
+          props.agent.id,
+          page() === "folders",
+          ...(props.agent.additionalFolders ?? []),
+          "",
+          ...(props.agent.excludedFolders ?? []),
+        ].join("\n")
+      : "",
+  );
+  createEffect(
+    () => {
+      folderLoadKey();
+      return untrack(folderSource);
+    },
+    (source) => agentFolders.load(source),
+  );
+
+  /**
+   * The access label when the agent can change all files: the folders then do not apply. A provider
+   * whose own file tools reach only its folders is not one of this app's providers, so a Workspace
+   * only agent is the only one the folders work for.
+   */
+  function wideAccess(): string | null {
+    return draft.permission === "workspace" ? null : t(ACCESS_LABEL[draft.permission]);
+  }
+
   const [page, setPage] = createSignal<AgentSettingsPage | null>(null);
   // The root row that opened the closed page takes the focus back when the root shows again.
   let returnFocusPage: AgentSettingsPage | null = null;
@@ -1102,7 +1142,9 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                             aria-label={
                               builtInSelection() === preset.id
                                 ? t("agentSettings.avatar.selected")
-                                : (preset.labelKey ? t(preset.labelKey) : preset.name)
+                                : preset.labelKey
+                                  ? t(preset.labelKey)
+                                  : preset.name
                             }
                             aria-pressed={builtInSelection() === preset.id ? "true" : "false"}
                             data-cuelume-tap="select"
@@ -1358,6 +1400,14 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                   value={t(ACCESS_LABEL[draft.permission])}
                   onClick={() => openPage("permissions")}
                 />
+                <Show when={props.folders}>
+                  <AgentFoldersRow
+                    ref={pageRowRef("folders")}
+                    folders={agentFolders}
+                    wideAccess={wideAccess()}
+                    onOpen={() => openPage("folders")}
+                  />
+                </Show>
                 <div class="agent-settings-switch-row">
                   <span class="settings-link-label">
                     <span class="settings-link-icon">
@@ -1464,6 +1514,16 @@ export default function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                   />
                 </div>
               </Show>
+            </Show>
+            <Show when={page() === "folders"}>
+              <AgentFoldersPage
+                folders={agentFolders}
+                agentName={props.agent.name}
+                wideAccess={wideAccess()}
+                workspaceAccess={t(ACCESS_LABEL.workspace)}
+                showExclusions={draft.permission === "workspace" || wideAccess() !== null}
+                onChangeAccess={() => openPage("permissions")}
+              />
             </Show>
             <Show when={page() === "backup-models"}>
               <BackupModelsPage

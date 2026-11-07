@@ -1,5 +1,6 @@
 // Discovers models only for an explicit custom API endpoint. Legacy local scan requests return no results.
 import type {
+  DetectedAcpAgent,
   DetectedModelServer,
   DiscoverModelsInput,
   DiscoverModelsResult,
@@ -8,6 +9,7 @@ import type {
 import { arkPlanKind, sameCustomProviderOrigin } from "@openbot/contracts/ipc";
 import { sourceText } from "@openbot/i18n/source";
 import { Context, Effect, Exit, Fiber, Layer, ManagedRuntime, Scope } from "effect";
+import { scanAcpAgents } from "../backend/acp-agent-scan";
 import type { CustomProviderConfig } from "../backend/custom-provider-types";
 import { ArkPlanModelFailure, probeArkPlanModels } from "./ark-plan-models";
 import { ModelServerProbe, type ProbeError } from "./model-server-probe";
@@ -18,7 +20,9 @@ const DISCOVER_TIMEOUT_MS = 8_000;
 export interface ProviderDetectionDependencies {
   settings: { get(): ProviderDetectionSettings };
   customProviders: { configs(): readonly CustomProviderConfig[] };
+  customAgents: { configs(): readonly { id: string }[] };
   probe?: Context.Service.Shape<typeof ModelServerProbe>["probe"];
+  scanAgents?: typeof scanAcpAgents;
 }
 
 export type ProviderDetection = Context.Service.Shape<typeof ProviderDiscovery>;
@@ -27,6 +31,7 @@ class ProviderDiscovery extends Context.Service<
   ProviderDiscovery,
   {
     scanModelServers(): Effect.Effect<DetectedModelServer[]>;
+    scanAgents(): Effect.Effect<DetectedAcpAgent[]>;
     discoverModels(input: DiscoverModelsInput): Effect.Effect<DiscoverModelsResult, ProbeError | ArkPlanModelFailure>;
   }
 >()("openbot/main/ProviderDiscovery") {
@@ -40,6 +45,30 @@ class ProviderDiscovery extends Context.Service<
         const injectedProbe = dependencies.probe;
         const probe = injectedProbe ?? modelProbe.probe;
         const scan = () => Effect.succeed<DetectedModelServer[]>([]);
+        let agentScan: Fiber.Fiber<DetectedAcpAgent[]> | null = null;
+        const injectedScanAgents = dependencies.scanAgents;
+        // Looks for known agent command names only. It starts no file.
+        const scanAgents = Effect.fn("ProviderDiscovery.scanAgents")(function* () {
+          if (agentScan) return yield* Fiber.join(agentScan);
+          const fiber = yield* Effect.forkIn(
+            Effect.gen(function* () {
+              const current = dependencies.settings.get();
+              if (!current.enabled) return [];
+              const input = {
+                folders: current.folders,
+                takenIds: new Set(dependencies.customAgents.configs().map((config) => config.id)),
+              };
+              return yield* (injectedScanAgents ?? scanAcpAgents)(input);
+            }),
+            scope,
+            { startImmediately: true },
+          );
+          agentScan = fiber;
+          fiber.addObserver(() => {
+            if (agentScan === fiber) agentScan = null;
+          });
+          return yield* Fiber.join(fiber);
+        });
         const discoverModels = Effect.fn("ProviderDiscovery.discoverModels")(function* (input: DiscoverModelsInput) {
           const kind = arkPlanKind(input.baseUrl);
           if (kind) {
@@ -72,6 +101,7 @@ class ProviderDiscovery extends Context.Service<
         });
         return ProviderDiscovery.of({
           scanModelServers: scan,
+          scanAgents,
           discoverModels,
         });
       }),

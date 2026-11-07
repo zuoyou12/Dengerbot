@@ -27,7 +27,9 @@ export interface AppPort {
     OpenBotDesktopApi["agent"],
     "readConversationPage" | "searchConversationMessages" | "searchConversationFiles" | "listRoutines" | "listAgents"
   >;
-  providerDetection: Pick<OpenBotDesktopApi["providerDetection"], "discoverModels">;
+  providerDetection: Pick<OpenBotDesktopApi["providerDetection"], "discoverModels" | "scanAgents">;
+  customAgents: OpenBotDesktopApi["customAgents"];
+  acpRegistry: OpenBotDesktopApi["acpRegistry"];
   events: OpenBotDesktopApi["events"];
   plugins: Pick<OpenBotDesktopApi["plugins"], "onOpenListing" | "takePendingListing">;
   servers: Pick<OpenBotDesktopApi["servers"], "onInvite" | "takePendingInvite">;

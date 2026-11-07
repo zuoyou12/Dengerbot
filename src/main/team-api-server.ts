@@ -290,7 +290,15 @@ export class TeamApiServer {
   #hostRestart: HostRestartEvent = { type: HOST_RESTART_EVENT, state: "none", version: null };
   readonly #responseRoutes = new WeakMap<
     ServerResponse,
-    { method: string; path: string; protocol: number; capabilities: Set<string>; hiddenAgentIds?: ReadonlySet<string> }
+    {
+      method: string;
+      path: string;
+      protocol: number;
+      capabilities: Set<string>;
+      hiddenAgentIds?: ReadonlySet<string>;
+      /** The same paired phone test the request's answer must project with. */
+      pairedDeepSeek?: boolean;
+    }
   >();
   readonly #duplicateRequests = new Map<
     string,
@@ -809,7 +817,10 @@ export class TeamApiServer {
       // Every protocol gets the projection, also with no hidden agent: a provider status row, a
       // model or an auth state of a local-only provider can be in the response.
       const responseRoute = this.#responseRoutes.get(response);
-      if (responseRoute) responseRoute.hiddenAgentIds = hidden;
+      if (responseRoute) {
+        responseRoute.hiddenAgentIds = hidden;
+        responseRoute.pairedDeepSeek = context.pairedDeepSeek;
+      }
       const agentId = url.pathname.match(/^\/v1\/agents\/([^/]+)/u)?.[1];
       if (
         (agentId && hidden.has(pathIdentifier(agentId, "agentId"))) ||
@@ -1061,7 +1072,8 @@ export class TeamApiServer {
     const protocol = eventProtocol(capabilities);
     const hidden = hiddenProviderAgentIds(this.#options.agents.listAgents(), protocol, pairedDeepSeek);
     for (const id of blocked) hidden.add(id);
-    const visible = protocol === 1 ? legacyProviderView(event, hidden) : hiddenAgentView(event, hidden, protocol);
+    const visible =
+      protocol === 1 ? legacyProviderView(event, hidden) : hiddenAgentView(event, hidden, protocol, pairedDeepSeek);
     if (!isAgentEvent(visible) && !isTeamRealtimeEvent(visible)) return null;
     if (protocol !== 1)
       return (
@@ -1766,6 +1778,7 @@ export class TeamApiServer {
               value,
               route.hiddenAgentIds,
               route.protocol < 5 ? 4 : route.protocol < 6 ? 5 : route.protocol < 7 ? 6 : route.protocol < 8 ? 7 : 8,
+              route.pairedDeepSeek === true,
             )
         : value;
     const sideRoute = teamSideRouteCodec(route.path);

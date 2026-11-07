@@ -5,6 +5,7 @@ import {
   type AgentMemorySelectionChange,
   type AgentTaskInput,
   agentThreadTitle,
+  type BranchAgentTaskInput,
   type CancelAgentWaitInput,
   type CancelMessageLinkInput,
   type CancelQueuedMessageInput,
@@ -39,6 +40,7 @@ import {
   type ListChannelRoutineRunsInput,
   type ListRoutineRunsInput,
   type MarkConversationReadInput,
+  type MarkConversationUnreadInput,
   type OpenAttachmentInput,
   type OpenMessageLinkInput,
   type OpenSharedFileInput,
@@ -79,7 +81,7 @@ import { decodeQueueEditRequest } from "@openbot/contracts/team-protocol/queue-e
 import { sourceText } from "@openbot/i18n/source";
 import type { PayloadDecoder } from "../trusted-ipc";
 import { parseAvatarImage } from "./avatar-inputs";
-import { isObject, requireString } from "./validation";
+import { isObject, optionalBoolean, requireString } from "./validation";
 
 function parseAgentRequest(value: unknown): AgentIpcRequest {
   if (!isObject(value)) throw new Error("Invalid agent request.");
@@ -546,11 +548,16 @@ export function parseSendMessage(value: unknown): SendMessageInput {
 
 export function parseStartAgentTask(value: unknown): StartAgentTaskInput {
   const { agentId, text, attachmentDraftIds, clientMessageId } = parseSendMessage(value);
+  if (!isObject(value)) throw new Error("Invalid task request.");
+  // The flag is local-only: a remote task start never carries it, and the frozen `agent-tasks-v1`
+  // routes refuse it.
+  const isolatedWorktree = optionalBoolean(value.isolatedWorktree, "isolatedWorktree");
   return {
     agentId,
     text,
     ...(attachmentDraftIds ? { attachmentDraftIds } : {}),
     ...(clientMessageId ? { clientMessageId } : {}),
+    ...(isolatedWorktree === undefined ? {} : { isolatedWorktree }),
   };
 }
 
@@ -567,6 +574,16 @@ export function parseAgentTask(value: unknown): AgentTaskInput {
   return {
     agentId: requireString(value.agentId, "agentId"),
     taskId: requireString(value.taskId, "taskId"),
+  };
+}
+
+export function parseBranchAgentTask(value: unknown): BranchAgentTaskInput {
+  if (!isObject(value)) throw new Error("Invalid branch request.");
+  return {
+    agentId: requireString(value.agentId, "agentId", INPUT_LIMITS.identifier),
+    taskId: value.taskId === null ? null : requireString(value.taskId, "taskId", INPUT_LIMITS.identifier),
+    messageId: requireString(value.messageId, "messageId", INPUT_LIMITS.identifier),
+    requestId: requireString(value.requestId, "requestId", INPUT_LIMITS.identifier),
   };
 }
 
@@ -601,6 +618,14 @@ export function parseMarkConversationRead(value: unknown): MarkConversationReadI
     agentId: requireString(value.agentId, "agentId", INPUT_LIMITS.identifier),
     throughMessageId:
       throughMessageId === null ? null : requireString(throughMessageId, "throughMessageId", INPUT_LIMITS.identifier),
+  };
+}
+
+export function parseMarkConversationUnread(value: unknown): MarkConversationUnreadInput {
+  if (!isObject(value)) throw new Error("Invalid conversation unread request.");
+  return {
+    agentId: requireString(value.agentId, "agentId", INPUT_LIMITS.identifier),
+    fromMessageId: requireString(value.fromMessageId, "fromMessageId", INPUT_LIMITS.identifier),
   };
 }
 

@@ -181,6 +181,8 @@ export const messages = defineMessages("error.backend", {
   "error.backend.agentWaitNoRoutine":
     "Only a run of one of your routines wakes a wait, and you have no routine. Create one with openbot.create_routine, then open the wait.",
   "error.backend.agentWaitRemoteUnsupported": "Open waits are only available for agents on this computer.",
+  "error.backend.markUnreadRemoteUnsupported":
+    "Marking a message unread is only available for agents on this computer.",
   "error.backend.routineFlowHandoffFailed": "The routine could not pass the work on to this agent.",
   "error.backend.mcpServerLimit": "Dengerbot keeps up to {limit} MCP servers.",
   "error.backend.mcpServerNameTaken": "An MCP server named {name} already exists.",
@@ -330,4 +332,17 @@ export const messages = defineMessages("error.backend", {
     "This agent has {count} open tasks. Close a task, then start or open another one.",
   "error.backend.taskRemoteUnsupported": "Tasks are only available for agents on this computer.",
   "error.backend.taskStartFailed": "Dengerbot could not start the task. Do the work in this turn instead.",
+  // Branches: a copy of a conversation of this agent, up to one finished turn. Local only.
+  "error.backend.branchSourceBusy": "The conversation is busy. Wait until its turn ends, then branch it.",
+  "error.backend.branchMessageNotFound": "That message cannot start a branch. Branch from a finished answer.",
+  // Isolated task worktrees: a git checkout of the agent's workspace for one task. Local only.
+  "error.backend.taskWorktreeUnavailable":
+    "This build cannot create a task worktree. Start the task without isolation.",
+  "error.backend.taskWorktreeNotRepository":
+    "The workspace of this agent is not a git repository. Start the task without isolation.",
+  "error.backend.taskWorktreeBranchTaken":
+    "This agent already has a checkout under that task branch. Remove or reuse it, then start again.",
+  "error.backend.taskWorktreeGitFailed":
+    "Dengerbot could not create the git worktree. Start the task without isolation.",
+  "error.backend.taskWorktreeRemoteUnsupported": "An isolated worktree is only available for agents on this computer.",
 });

@@ -16,7 +16,7 @@ const CLAUDE_PATH =
 // A neutral ring for a provider that this build does not know. It is no provider's mark.
 const UNKNOWN_PATH = "M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Z";
 
-export type ProviderLogoVariant = "codex" | "claude" | "deepseek" | "unknown";
+export type ProviderLogoVariant = "codex" | "claude" | "deepseek" | "acp" | "unknown";
 
 export interface ProviderLogoPath {
   d: string;

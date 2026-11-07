@@ -1,3 +1,4 @@
+import { win32 } from "node:path";
 import type { RequestError } from "@agentclientprotocol/sdk";
 import { isRecord } from "./protocol";
 
@@ -76,6 +77,40 @@ export const CURSOR_ACP_FLAVOR: AcpFlavor = {
   sessionNotFound: (error, sessionId) =>
     error.code === -32602 ? isRecord(error.data) && error.data.message === `Session "${sessionId}" not found` : null,
 };
+
+/**
+ * omp 18.8.4 wraps its exact missing-ID error in an internal error (#1690). Other internal failures,
+ * including an error for another session, are not lifecycle signals.
+ */
+function ompSessionNotFound(error: RequestError, sessionId: string): boolean | null {
+  return error.code === -32603
+    ? isRecord(error.data) && error.data.details === `Unsupported ACP session: ${sessionId}`
+    : null;
+}
+
+/** Oh My Pi (`omp acp`). Its rules are here when they do not apply to every custom agent. */
+const OMP_ACP_FLAVOR: AcpFlavor = { sessionNotFound: ompSessionNotFound };
+
+/**
+ * A custom agent without a flavor of its own. It keeps omp's rule: the rule needs the exact session
+ * ID, and an agent can reuse omp's error text.
+ */
+const CUSTOM_ACP_FLAVOR: AcpFlavor = { sessionNotFound: ompSessionNotFound };
+
+const CUSTOM_AGENT_FLAVORS: Readonly<Partial<Record<string, AcpFlavor>>> = { omp: OMP_ACP_FLAVOR };
+
+/**
+ * The flavor of a custom agent, from the exact name of its command: `omp`, `/usr/local/bin/omp`
+ * and `C:\bin\omp.exe` are Oh My Pi, `omp-dev` is not. A name in the middle of another name never
+ * selects a flavor, because a wrong flavor can replace a session.
+ */
+export function customAgentFlavor(command: string): AcpFlavor {
+  const name = win32
+    .basename(command)
+    .toLowerCase()
+    .replace(/\.(?:exe|cmd|bat)$/u, "");
+  return CUSTOM_AGENT_FLAVORS[name] ?? CUSTOM_ACP_FLAVOR;
+}
 
 const FAILURE_DETAIL_LIMIT = 200;
 

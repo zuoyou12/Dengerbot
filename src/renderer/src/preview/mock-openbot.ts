@@ -2,11 +2,16 @@ import { AGENT_MEMORY_CONTEXT_BUDGET_BYTES, essentialMemoryBytes } from "@openbo
 import type { AgentSessionSettings, HiddenAgentsSnapshot } from "@openbot/contracts/ipc";
 import {
   type AccountUsage,
+  type AcpRegistryEntry,
   AGENT_DEFAULT_KEYS,
+  AGENT_FOLDER_LIMIT,
   type AgentAccessChange,
   type AgentBrowserProfile,
   type AgentDefaults,
   type AgentEvent,
+  type AgentExclusionChange,
+  type AgentFolderChange,
+  type AgentFolderList,
   type AgentMemory,
   type AgentMemoryLimitPreference,
   type AgentMemorySelection,
@@ -32,6 +37,8 @@ import {
   agentAutomationAllowed,
   agentBrowserProfile,
   agentComputerUseEnabled,
+  agentExclusionCoverage,
+  agentFolderCoverage,
   agentTaskLimit,
   type BrowserProfileSummary,
   type BusyMessageModePreference,
@@ -44,6 +51,7 @@ import {
   type ConversationReadState,
   type ConversationSnapshot,
   type ConversationTurnTrace,
+  type CustomAgentSummary,
   type CustomProviderSummary,
   composedCustomModelId,
   createMcpServerId,
@@ -72,6 +80,7 @@ import {
   type ExternalLinkBrowsers,
   type ExternalLinkPreference,
   type FilePreview,
+  folderInside,
   type HostStatus,
   hostAgentMemoryLimit,
   isAgentMemoryLimit,
@@ -504,6 +513,18 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
   const usageResets = new Map<string, number>();
   let agentCounter = agents.length;
   let detectionSettings: ProviderDetectionSettings = clone(DEFAULT_PROVIDER_DETECTION_SETTINGS);
+  let customAgents: CustomAgentSummary[] = [];
+  const registryEntry: AcpRegistryEntry = {
+    id: "example-acp",
+    name: "Example ACP",
+    version: "1.0.0",
+    description: "Preview agent",
+    website: null,
+    license: "MIT",
+    distributions: ["binary"],
+    installedVersion: null,
+    customAgentId: null,
+  };
   // The same two endpoints the model-picker stories invent, so preview shows one list everywhere.
   let customProviders = clone(
     options.customProviders ?? [
@@ -614,6 +635,8 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
   const taskConversations = new Map<string, ConversationSnapshot>(
     Object.entries(clone(options.taskConversations ?? {})),
   );
+  /** The branch of each `branchTask` request id, so a retry returns the same branch. */
+  const branches = new Map<string, AgentTask>();
 
   function taskList(agentId: string): AgentTasksSnapshot {
     const list = tasks.get(agentId) ?? [];
@@ -628,6 +651,70 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
     const agent = agents.find((candidate) => candidate.id === agentId);
     // Tasks run on this computer, so an agent on a provider that this build does not know has none.
     return agent && isAgentSummary(agent) ? agentTaskLimit(agent) : 1;
+  }
+
+  function mockAgentOf(agentId: string): ClientAgentSummary {
+    const agent = agents.find((candidate) => candidate.id === agentId);
+    if (!agent) throw new Error("Agent not found");
+    return agent;
+  }
+
+  function mockAgentFolders(agentId: string): AgentFolderList {
+    const agent = mockAgentOf(agentId);
+    return {
+      workspace: agent.workspacePath,
+      shared: "/mock/OpenBot/Shared",
+      folders: (agent.additionalFolders ?? []).map((path) => ({ path, found: !path.endsWith("(missing)") })),
+      excluded: agent.excludedFolders ?? [],
+    };
+  }
+
+  function setMockAgentExclusions(agent: ClientAgentSummary, excluded: string[]): void {
+    const updated: ClientAgentSummary = { ...agent, excludedFolders: excluded };
+    if (excluded.length === 0) delete updated.excludedFolders;
+    agents = agents.map((candidate) => (candidate.id === agent.id ? updated : candidate));
+    emitAgentEvent({ type: "agents-changed", agents });
+  }
+
+  function addMockAgentExclusion(agentId: string, path: string): AgentExclusionChange {
+    const agent = mockAgentOf(agentId);
+    const list = mockAgentFolders(agentId);
+    const roots = [list.workspace, list.shared, ...list.folders.map((folder) => folder.path)];
+    if (roots.includes(path)) return { outcome: "refused", path, refusal: "root", list };
+    if (!roots.some((root) => folderInside(root, path))) return { outcome: "refused", path, refusal: "outside", list };
+    const folder = agentExclusionCoverage(path, list.excluded);
+    if (folder) return { outcome: "covered", path, folder, list };
+    const kept = list.excluded.filter((excluded) => !folderInside(path, excluded));
+    if (kept.length >= AGENT_FOLDER_LIMIT) return { outcome: "refused", path, refusal: "limit", list };
+    setMockAgentExclusions(agent, [...kept, path]);
+    const replaced = list.excluded.filter((excluded) => !kept.includes(excluded));
+    return { outcome: "excluded", path, replaced, list: mockAgentFolders(agentId) };
+  }
+
+  function setMockAgentFolders(agent: ClientAgentSummary, folders: string[]): void {
+    const updated: ClientAgentSummary = { ...agent, additionalFolders: folders };
+    if (folders.length === 0) delete updated.additionalFolders;
+    agents = agents.map((candidate) => (candidate.id === agent.id ? updated : candidate));
+    emitAgentEvent({ type: "agents-changed", agents });
+  }
+
+  function addMockAgentFolder(agentId: string, path: string, replace?: string): AgentFolderChange {
+    const agent = mockAgentOf(agentId);
+    const current = agent.additionalFolders ?? [];
+    const others = current.filter((folder) => folder !== replace);
+    const list = mockAgentFolders(agentId);
+    const coverage = agentFolderCoverage(path, { workspace: list.workspace, shared: list.shared, folders: others });
+    if (coverage) return { outcome: "covered", path, coverage, list };
+    const kept = others.filter((folder) => !folderInside(path, folder));
+    if (kept.length >= AGENT_FOLDER_LIMIT) return { outcome: "refused", path, refusal: "limit", list };
+    const replacing = replace !== undefined && current.includes(replace);
+    setMockAgentFolders(
+      agent,
+      replacing ? current.map((folder) => (folder === replace ? path : folder)) : [...kept, path],
+    );
+    if (replacing) return { outcome: "replaced", path, list: mockAgentFolders(agentId) };
+    const replaced = others.filter((folder) => !kept.includes(folder));
+    return { outcome: "added", path, replaced, list: mockAgentFolders(agentId) };
   }
 
   function hiddenAgents(): HiddenAgentsSnapshot {
@@ -1177,9 +1264,83 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
         return { providers: clone(customProviders), restart: "restarted" };
       },
     },
+    // Preview starts no process: the names are kept, the values are dropped, and a check answers
+    // for the command without running it.
+    acpRegistry: {
+      search: async (query) =>
+        clone(!query || registryEntry.name.toLowerCase().includes(query.toLowerCase()) ? [registryEntry] : []),
+      installed: async () =>
+        registryEntry.installedVersion && registryEntry.customAgentId
+          ? [
+              {
+                registryId: registryEntry.id,
+                customAgentId: registryEntry.customAgentId,
+                version: registryEntry.installedVersion,
+                distribution: "binary",
+              },
+            ]
+          : [],
+      status: async () => [],
+      install: async (input) => {
+        registryEntry.installedVersion = registryEntry.version;
+        registryEntry.customAgentId = input.customAgentId;
+        if (!customAgents.some((agent) => agent.id === input.customAgentId))
+          customAgents.push({
+            id: input.customAgentId,
+            name: input.name ?? registryEntry.name,
+            command: "/preview/example-acp",
+            args: [],
+            envNames: [],
+            resolvedCommand: "/preview/example-acp",
+            usagePrompt: null,
+          });
+        return { agents: clone(customAgents), restart: "not-running" };
+      },
+      cancel: async () => undefined,
+      remove: async () => {
+        registryEntry.installedVersion = null;
+      },
+    },
+    customAgents: {
+      list: async () => clone(customAgents),
+      save: async (input) => {
+        const summary: CustomAgentSummary = {
+          id: input.id,
+          name: input.name,
+          command: input.command,
+          args: [...input.args],
+          envNames: input.env.map((entry) => entry.name),
+          resolvedCommand: input.command.startsWith("/") ? input.command : `/usr/local/bin/${input.command}`,
+          usagePrompt: input.usagePrompt,
+        };
+        customAgents = customAgents.some((agent) => agent.id === input.id)
+          ? customAgents.map((agent) => (agent.id === input.id ? summary : agent))
+          : [...customAgents, summary];
+        emitAgentEvent({ type: "status", status: clone(agentStatus) });
+        return { agents: clone(customAgents), restart: "restarted" };
+      },
+      delete: async ({ id }) => {
+        customAgents = customAgents.filter((agent) => agent.id !== id);
+        emitAgentEvent({ type: "status", status: clone(agentStatus) });
+        return { agents: clone(customAgents), restart: "restarted" };
+      },
+      check: async (input) => ({
+        agentName: input.command.split("/").pop() ?? input.command,
+        version: null,
+        protocolVersion: 1,
+        capabilities: ["loadSession"],
+        models: ["Default", "Fast"],
+      }),
+      // Preview starts no agent, so each usage prompt gets an answer that names it.
+      usage: async () =>
+        customAgents.flatMap((agent) =>
+          agent.usagePrompt ? [{ id: agent.id, text: `Preview answer to ${agent.usagePrompt}` }] : [],
+        ),
+    },
     // Preview reaches no local server, so a scan finds nothing and a model list is empty.
     providerDetection: {
       scanModelServers: async () => [],
+      scanAgents: async () => [],
       discoverModels: async () => ({ models: [] }),
       getSettings: async () => clone(detectionSettings),
       setSettings: async (settings) => {
@@ -1340,6 +1501,45 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
       updateAgentBackupModels: async (input) => {
         await api.agent.updateAgent(input);
         return api.agent.getAgentBackupModels(input.agentId);
+      },
+      listAgentFolders: async (agentId) => mockAgentFolders(agentId),
+      chooseAgentFolder: async ({ agentId, replace }) =>
+        addMockAgentFolder(agentId, replace ? `${replace} (found)` : "/mock/Projects/Leads", replace),
+      addAgentFolder: async ({ agentId, path, replace }) => addMockAgentFolder(agentId, path, replace),
+      addDroppedAgentFolder: async (agentId, folder) => addMockAgentFolder(agentId, `/mock/Dropped/${folder.name}`),
+      removeAgentFolder: async ({ agentId, path }) => {
+        const agent = mockAgentOf(agentId);
+        setMockAgentFolders(
+          agent,
+          (agent.additionalFolders ?? []).filter((folder) => folder !== path),
+        );
+        return { outcome: "removed", path, list: mockAgentFolders(agentId) };
+      },
+      // The preview has no picker: it excludes a folder in the workspace.
+      chooseAgentExclusion: async (agentId) =>
+        addMockAgentExclusion(agentId, `${mockAgentOf(agentId).workspacePath}/archive`),
+      addAgentExclusion: async ({ agentId, path }) => addMockAgentExclusion(agentId, path),
+      removeAgentExclusion: async ({ agentId, path }) => {
+        const agent = mockAgentOf(agentId);
+        setMockAgentExclusions(
+          agent,
+          (agent.excludedFolders ?? []).filter((folder) => folder !== path),
+        );
+        return { outcome: "included", path, list: mockAgentFolders(agentId) };
+      },
+      // A small host tree for the folder browser of a joined server.
+      browseAgentFolders: async ({ path }) => {
+        const home = "/mock";
+        const folder = path ?? home;
+        const names = folder === home ? ["Documents", "Projects"] : [];
+        return {
+          path: folder,
+          parentPath: folder === "/" ? null : folder.slice(0, folder.lastIndexOf("/")) || "/",
+          entries: names.map((name) => ({ name, path: `${folder}/${name}` })),
+          truncated: false,
+          home,
+          volumes: [],
+        };
       },
       getAgentTaskLimit: async (agentId) => {
         const agent = agents.find((candidate) => candidate.id === agentId);
@@ -1853,6 +2053,15 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
         if (conversationReads.has(input.agentId)) conversationReads.set(input.agentId, state);
         return clone(state);
       },
+      markConversationUnread: async (input) => {
+        const { messages, revision } = getSnapshot(input.agentId);
+        const index = messages.findIndex((message) => message.id === input.fromMessageId);
+        if (index < 0) throw new Error(sourceText("error.backend.readBoundaryUnavailable"));
+        const throughMessageId = messages[index - 1]?.id ?? null;
+        conversationReads.set(input.agentId, { unreadCount: 0, firstUnreadMessageId: null, throughMessageId });
+        emitAgentEvent({ type: "conversation-invalidated", agentId: input.agentId, revision });
+        return clone(conversationReadState(input.agentId));
+      },
       chooseAttachments: async (_input) => [],
       importAttachmentData: async (data) =>
         data.map((file) => ({
@@ -2040,6 +2249,46 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
         emitAgentEvent({ type: "queue-changed", snapshot: clone(queue) });
         const task = createTask(input.agentId, delivery.text);
         runTaskTurn(task, delivery.text);
+        return clone(task);
+      },
+      branchTask: async (input) => {
+        const earlier = branches.get(input.requestId);
+        if (earlier) return clone(earlier);
+        const sourceTask = input.taskId === null ? null : findTask(input.agentId, input.taskId);
+        const source = sourceTask ? taskConversation(sourceTask) : getSnapshot(input.agentId);
+        if (source.activeTurnId) throw new Error(sourceText("error.backend.branchSourceBusy"));
+        const index = source.messages.findIndex((message) => message.id === input.messageId);
+        const chosen = source.messages[index];
+        if (chosen?.author !== "assistant" || chosen.status === "streaming") {
+          throw new Error(sourceText("error.backend.branchMessageNotFound"));
+        }
+        const messages = source.messages
+          .slice(0, index + 1)
+          .map(({ delivery: _delivery, reaction: _reaction, reactions: _reactions, ...message }) => ({
+            ...clone(message),
+            id: `mock-branch-message-${messageCounter++}`,
+          }));
+        const lastUserText = messages.findLast((message) => message.author === "user")?.text;
+        const task = createTask(
+          input.agentId,
+          sourceTask ? `${sourceTask.title} #2` : lastUserText?.trim() || sourceText("status.agent.branchTitle"),
+        );
+        const through = messages.at(-1);
+        task.branch = {
+          sourceTaskId: input.taskId,
+          sourceTitle: sourceTask?.title ?? null,
+          sourceMessageId: input.messageId,
+          throughMessageId: through?.id ?? input.messageId,
+        };
+        taskConversations.set(task.id, {
+          agentId: task.agentId,
+          threadId: task.threadId,
+          activeTurnId: null,
+          revision: 0,
+          messages,
+        });
+        branches.set(input.requestId, task);
+        emitTasks(input.agentId);
         return clone(task);
       },
       stopTask: async (input) => {

@@ -163,4 +163,8 @@ export const messages = defineMessages("mobile.settings", {
   "mobile.settings.profile.signOutTitle": "Sign out?",
   "mobile.settings.profile.signOutBody": "Reconnect by scanning a new code from Dengerbot on your desktop.",
   "mobile.settings.profile.signOut": "Sign out",
+  "mobile.settings.profile.pairedIdentity":
+    "This phone is signed in to your computer. The name and photo live there, so they can be changed only on the desktop.",
+  "mobile.settings.sessions.pairedNote":
+    "This phone is signed in to your computer by pairing, so it keeps no account sessions of its own. The desktop lists the connected devices.",
 });

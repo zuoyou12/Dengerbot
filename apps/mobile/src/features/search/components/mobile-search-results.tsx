@@ -58,7 +58,8 @@ function useSearchSettings(channelsSupported: boolean): MobileSearchSetting[] {
     const app = t("mobile.app.route.settings");
     const pages: MobileSearchSetting[] = [
       { id: "profile", title: t("mobile.app.route.profile"), detail: app },
-      { id: "sessions", title: t("mobile.app.route.accountSessions"), detail: app },
+      // The account-sessions route stays reachable only by deep link; a paired phone keeps no
+      // account sessions of its own, so search does not offer it.
       { id: "appearance", title: t("mobile.settings.appearance.title"), detail: app },
       { id: "animations", title: t("mobile.settings.animations.title"), detail: app },
       { id: "language", title: t("mobile.settings.language.title"), detail: app },

@@ -68,8 +68,6 @@ import {
 } from "@/features/search/components/home-search";
 import { setHomeSearchUnavailable } from "@/features/search/model/home-search-request";
 import { useAppDrawer } from "@/features/servers/components/app-drawer-shell";
-import { PlanLimitsHeaderButton } from "@/features/servers/components/plan-limits-header-button";
-import { usePlanLimits } from "@/features/servers/model/plan-limits";
 import { ConnectionHeaderStatus } from "@/features/workspace/components/connection-header-status";
 import { useWaitingAgentIds } from "@/features/workspace/components/use-agent-activity";
 import { useUnreadAgentIds } from "@/features/workspace/components/use-live-workspace";
@@ -356,8 +354,6 @@ export function ConnectedScreen({ variant = "screen" }: { variant?: "screen" | "
   const iconColor = String(foreground);
   const mutedColor = String(muted);
   const hasSelectedServer = servers.some((server) => server.id === activeServer.id);
-  const planLimits = usePlanLimits(activeServer.id);
-  const showsPlanLimits = hasSelectedServer && planLimits.rows.length > 0;
   const showLoader =
     (serverDirectoryState === "loading" && servers.length === 0) ||
     (hasSelectedServer && activeServer.initialConnectionPending);
@@ -639,27 +635,6 @@ export function ConnectedScreen({ variant = "screen" }: { variant?: "screen" | "
   );
   const headerTrailing = (
     <View className="shrink-0 flex-row items-center gap-1">
-      {showsPlanLimits ? (
-        isAndroid ? (
-          <PlanLimitsHeaderButton
-            serverId={activeServer.id}
-            rows={planLimits.rows}
-            accounts={planLimits.accounts}
-            disabled={!planLimits.online}
-            androidGlass={buttonGlass}
-          />
-        ) : (
-          <HeaderGlass glass={buttonGlass} capsule>
-            <PlanLimitsHeaderButton
-              serverId={activeServer.id}
-              rows={planLimits.rows}
-              accounts={planLimits.accounts}
-              disabled={!planLimits.online}
-              androidGlass={buttonGlass}
-            />
-          </HeaderGlass>
-        )
-      ) : null}
       <MenuView
         actions={optionsActions}
         onPressAction={(event) => onPressOption(event.nativeEvent.event)}
@@ -927,15 +902,6 @@ export function ConnectedScreen({ variant = "screen" }: { variant?: "screen" | "
             </Stack.Toolbar.View>
           </Stack.Toolbar>
           <Stack.Toolbar placement="right">
-            <Stack.Toolbar.View hidden={search.open || !showsPlanLimits}>
-              <PlanLimitsHeaderButton
-                serverId={activeServer.id}
-                rows={planLimits.rows}
-                accounts={planLimits.accounts}
-                disabled={!planLimits.online}
-                androidGlass={buttonGlass}
-              />
-            </Stack.Toolbar.View>
             <Stack.Toolbar.Menu
               icon="ellipsis"
               accessibilityLabel={t("mobile.agent.home.chatOptions")}

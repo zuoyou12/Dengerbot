@@ -1,4 +1,6 @@
 import {
+  type AgentExclusionChange,
+  type AgentFolderChange,
   type AgentSessionSettings,
   decodeAgentAnalytics,
   decodeHostAnalytics,
@@ -7,6 +9,10 @@ import {
   decodeProviderUsageResetOutcome,
   decodeProviderUsageResets,
   type HostProviderAccounts,
+  isAgentExclusionChange,
+  isAgentFolderBrowse,
+  isAgentFolderChange,
+  isAgentFolderList,
   isAgentHostSettings,
   isAgentSessionSettings,
   isAgentTask,
@@ -235,5 +241,18 @@ export function decodeHostAnalyticsFromHost(value: unknown) {
 
 export function decodeAgentSessionSettingsFromHost(value: unknown): AgentSessionSettings {
   if (!isAgentSessionSettings(value)) throw new Error("Invalid session settings response.");
+  return value;
+}
+
+export const decodeRemoteAgentFolderList = guardedDecoder(isAgentFolderList, "remote agent folders");
+export const decodeRemoteAgentFolderBrowse = guardedDecoder(isAgentFolderBrowse, "remote agent folder browse");
+
+export function decodeRemoteAgentFolderChange(value: unknown): AgentFolderChange {
+  if (!isDynamicRecord(value) || !isAgentFolderChange(value)) throw new Error("Invalid remote agent folder change.");
+  return value;
+}
+
+export function decodeRemoteAgentExclusionChange(value: unknown): AgentExclusionChange {
+  if (!isDynamicRecord(value) || !isAgentExclusionChange(value)) throw new Error("Invalid remote agent folder change.");
   return value;
 }

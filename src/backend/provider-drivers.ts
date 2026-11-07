@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
@@ -12,6 +13,7 @@ import {
 import { sourceText } from "@openbot/i18n/source";
 import { Effect } from "effect";
 import { AcpAgentClient, type AcpHistoryPersistence } from "./acp-client";
+import { customAgentFlavor } from "./acp-flavor";
 import { DSH_ACP_FLAVOR } from "./acp-flavor-dsh";
 import { codexFastServiceTier } from "./agent/provider-models";
 import type { AgentClient } from "./agent-client";
@@ -25,12 +27,13 @@ import {
   resolveCodexCli,
   resolveDshCli,
 } from "./cli";
+import { CustomAcpAgentsClient, type CustomAgentConfig, type CustomAgentSource } from "./custom-acp-agents-client";
 import type { CustomProviderConfig, CustomProviderSource } from "./custom-provider-types";
 import { DSH_ACCOUNT_BRIDGE_PATCH_ENTRY, installDshAccountBridge } from "./dsh-account-bridge";
 import type { McpOAuthAuthority } from "./mcp-oauth-provider";
 import type { McpOAuthProxySettingsStore } from "./mcp-oauth-proxy";
 import type { McpDropReporter, McpEndpointSource, McpServerSource, McpToolRuntimeSource } from "./mcp-provider-shapes";
-import type { ProcessConfinement } from "./process-confinement";
+import { confineSpawnTarget, customAgentStatePaths, type ProcessConfinement } from "./process-confinement";
 import { type AccountReadResult, isCodexLoginType, type ModelListResponse } from "./protocol";
 import { type ProviderClientOperationError, ProviderSignInError, providerFailure } from "./provider-client-effects";
 
@@ -173,6 +176,12 @@ export interface ProviderClientContext {
    * and keeps its sessions in that folder only.
    */
   readonly accountEnvironment?: Readonly<Record<string, string>>;
+  /**
+   * The saved custom agents with their environment values, read when an agent's process starts.
+   * Only the `acp` driver reads it. Optional for the same reason as `reportMcpDrops`: without it no
+   * custom agent is saved.
+   */
+  readonly customAgents?: CustomAgentSource;
   /**
    * How long this server asks Claude to keep the prompt cache, read at each spawn. Optional for the
    * same reason as `reportMcpDrops`: without it the CLI uses its own cache time.
@@ -472,9 +481,119 @@ export const BUILT_IN_PROVIDER_DRIVERS: readonly BuiltInProviderDriver[] = [
     authState: (account) => ({ kind: "deepseek", email: account?.email ?? null }),
     validateAccount: () => undefined,
   },
+  {
+    id: "acp",
+    // Each custom agent signs in its own way, in its own CLI. OpenBot only checks it again.
+    signIn: { kind: "external" },
+    // A custom agent can need more than 5 s to start and open a probe session in `initialize` and
+    // again in `model/list`: Claude Agent ACP with a few plugins and MCP servers does.
+    catalog: { slowList: true },
+    resolveCli: () => Effect.succeed(CUSTOM_AGENTS_CLI),
+    createClient: (_cli, timeout, context, confinement) =>
+      new CustomAcpAgentsClient(
+        () => savedCustomAgents(context),
+        (config, executable, folder, history, launchPath) =>
+          customAgentChild(config, executable, folder, timeout, context, confinement, false, history, launchPath),
+        undefined,
+        context.history?.("acp"),
+        confinement !== undefined,
+      ),
+    createProfileClient: (_cli, timeout, context) =>
+      new CustomAcpAgentsClient(
+        () => savedCustomAgents(context),
+        (config, executable, folder, history, launchPath) =>
+          customAgentChild(config, executable, folder, timeout, context, undefined, true, history, launchPath),
+        undefined,
+        context.history?.("acp"),
+      ),
+    authState: () => ({ kind: "acp", email: null }),
+    validateAccount: () => undefined,
+  },
 ] as const;
 
 const PROVIDER_DRIVERS = new Map(BUILT_IN_PROVIDER_DRIVERS.map((driver) => [driver.id, driver]));
+
+/**
+ * The ACP process of one custom agent. It is given the MCP servers and the confinement as a built-in
+ * ACP provider is, and a model check of its own: a model of this agent is served while the agent is
+ * saved. `CustomEndpoints.serves` is not used, because it knows only the custom endpoints.
+ *
+ * A process for a working folder lists its models in that folder: an agent that serves one folder
+ * for each process refuses any other. Only the process that lists the catalogue (`folder` null)
+ * uses the empty discovery folder.
+ */
+function customAgentChild(
+  config: CustomAgentConfig,
+  executable: string,
+  folder: string | null,
+  timeout: number,
+  context: ProviderClientContext,
+  confinement: ProcessConfinement | undefined,
+  profileGeneration: boolean,
+  history?: AcpHistoryPersistence,
+  launchPath?: string | null,
+): AgentClient {
+  // A `PATH` the user saved on the agent wins over the login shell's.
+  const env = {
+    ...(launchPath ? { PATH: launchPath } : {}),
+    ...Object.fromEntries(config.env.map((entry) => [entry.name, entry.value])),
+  };
+  const values = config.env.map((entry) => entry.value);
+  return new AcpAgentClient({ executable, version: "", source: "system" }, timeout, {
+    provider: "acp",
+    flavor: customAgentFlavor(config.command),
+    label: config.name,
+    allowNoModels: true,
+    discoveryCwd: () => folder ?? discoveryFolder(config.id),
+    redactValues: () => values,
+    argv: config.args,
+    env,
+    ...(profileGeneration ? { profileGeneration: true } : {}),
+    // The router owns durable reads so it can map routed IDs. The child only appends completed
+    // turns; its fallback read then talks to the provider when the stored import is incomplete.
+    history: profileGeneration ? undefined : history,
+    ...(confinement ? { confine: (target) => confineSpawnTarget(target, confinement, customAgentStatePaths()) } : {}),
+    signInMessage: sourceText("error.provider.customAgentSignIn"),
+    servesModel: () => savedCustomAgents(context).some((saved) => saved.id === config.id),
+    ...(profileGeneration
+      ? {}
+      : {
+          // A variable the user saved on this agent wins over the GitHub connection's. The
+          // `GIT_CONFIG_*` entries count on from the user's own, so they always apply.
+          extraEnv: () =>
+            Object.fromEntries(
+              Object.entries(context.agentEnvironment?.({ ...process.env, ...env }) ?? {}).filter(
+                ([name]) => name.startsWith("GIT_CONFIG_") || !(name in env),
+              ),
+            ),
+          mcpServers: context.mcpServers,
+          reportMcpDrops: context.reportMcpDrops,
+          mcpToolRuntimes: context.mcpToolRuntimes,
+          mcpEndpoint: context.mcpEndpoint,
+        }),
+  });
+}
+
+export function savedCustomAgents(context: ProviderClientContext): readonly CustomAgentConfig[] {
+  return context.customAgents?.() ?? [];
+}
+
+let customAgentDiscoveryRoot: string | undefined;
+
+/**
+ * An empty folder for the session that lists an agent's models, apart from every workspace. The
+ * root is new for each run and private (`mkdtemp`): a fixed path in a shared temp folder could be made
+ * first by another user, with an agent config file in it that the agent would then load.
+ */
+function discoveryFolder(agentId: string): string {
+  customAgentDiscoveryRoot ??= mkdtempSync(join(tmpdir(), "openbot-custom-agents-"));
+  const folder = join(customAgentDiscoveryRoot, agentId);
+  mkdirSync(folder, { recursive: true, mode: 0o700 });
+  return folder;
+}
+
+/** What the runtime shows for the provider `acp`: there is no one CLI, only the saved agents. */
+const CUSTOM_AGENTS_CLI: AgentCliInfo = { executable: "", version: "", source: "system" };
 
 export function requireProviderDriver(provider: AgentProviderId): BuiltInProviderDriver {
   const driver = PROVIDER_DRIVERS.get(provider);
