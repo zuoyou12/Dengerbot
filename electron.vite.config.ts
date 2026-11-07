@@ -6,7 +6,9 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import { parse } from "yaml";
 
 const rendererPort = readRendererPort(process.env.OPENBOT_DEV_RENDERER_PORT);
-const publish = parse(readFileSync(resolve("electron-builder.yml"), "utf8")).publish;
+// The packager config lives beside the other build configs; the dev build reads only its
+// `publish` block, for the update server the main process names.
+const publish = parse(readFileSync(resolve("config", "electron-builder.yml"), "utf8")).publish;
 if (
   publish?.provider !== "github" ||
   typeof publish.owner !== "string" ||
@@ -14,7 +16,7 @@ if (
   !/^[\w.-]+$/.test(publish.owner) ||
   !/^[\w.-]+$/.test(publish.repo)
 ) {
-  throw new Error("A GitHub publish owner and repository are required in electron-builder.yml.");
+  throw new Error("A GitHub publish owner and repository are required in config/electron-builder.yml.");
 }
 const releaseRepository = `${publish.owner}/${publish.repo}`;
 
