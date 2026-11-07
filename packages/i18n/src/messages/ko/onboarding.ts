@@ -36,8 +36,6 @@ export const messages = {
   "onboarding.setup.chooseProvider": "제공자 선택",
   "onboarding.setup.providerList": "{providers}, {last}",
   "onboarding.setup.providerSeparator": ", ",
-  "onboarding.provider.freeModels": "계정 없이 쓰는 무료 모델",
-  "onboarding.provider.deepseekKey": "DeepSeek API 키로 쓰는 DeepSeek 모델",
   "onboarding.provider.tryFree": "무료로 사용해 보기",
   "onboarding.provider.noSignIn": "로그인 필요 없음",
   "onboarding.provider.more": "더 많은 제공자",

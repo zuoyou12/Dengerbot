@@ -39,8 +39,6 @@ export const messages = {
   "onboarding.setup.chooseProvider": "Choisir un fournisseur",
   "onboarding.setup.providerList": "{providers} ou {last}",
   "onboarding.setup.providerSeparator": ", ",
-  "onboarding.provider.freeModels": "Modèles gratuits, aucun compte requis",
-  "onboarding.provider.deepseekKey": "Modèles DeepSeek avec une clé d’API DeepSeek",
   "onboarding.provider.tryFree": "Essayez gratuitement",
   "onboarding.provider.noSignIn": "Aucune connexion requise",
   "onboarding.provider.more": "Plus de fournisseurs",

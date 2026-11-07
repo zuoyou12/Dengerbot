@@ -95,6 +95,12 @@ export interface ProviderPickerOption {
    */
   freeModels?: boolean;
   /**
+   * The row's own account sign-in, shown in place of Connect: the caller starts it in the window it
+   * names and reports its end. A running one shows the row as connecting and offers the cancel of
+   * `onCancelAccountSignIn`; no other sign-in action is offered while it waits.
+   */
+  accountSignIn?: { label: string; running: boolean } | undefined;
+  /**
    * A short note drawn beside the row with an arrow pointing at it, like the drag hint of a macOS
    * installer. It repeats what the row already says, so assistive technology does not read it.
    */
@@ -155,6 +161,10 @@ export interface ProviderPickerProps {
   onSetProviderOn?: ((provider: AgentProviderId, on: boolean) => void | Promise<void>) | undefined;
   onInstallProvider?: ((provider: AgentProviderId) => void | Promise<void>) | undefined;
   onSignInProvider?: ((provider: AgentProviderId) => void | Promise<void>) | undefined;
+  /** Starts the account sign-in of a row whose option carries `accountSignIn`. */
+  onAccountSignIn?: ((provider: AgentProviderId) => void | Promise<void>) | undefined;
+  /** Ends the account sign-in a row waits for. Without it a running row offers no cancel. */
+  onCancelAccountSignIn?: ((provider: AgentProviderId) => void | Promise<void>) | undefined;
   /** Adds, signs in, names and removes the accounts of a row. Settings has it; onboarding does not. */
   accountActions?: ProviderAccountActions | undefined;
   /**
@@ -446,6 +456,7 @@ export function ProviderPicker(props: ProviderPickerProps) {
                 state,
                 runtimeStatus,
                 connecting,
+                accountSignIn,
                 available,
                 off,
                 updatable,
@@ -622,6 +633,40 @@ export function ProviderPicker(props: ProviderPickerProps) {
                         >
                           {t("provider.action.signInWithCode")}
                         </Button>
+                      </Show>
+                      {/* The row's own account sign-in, in place of Connect. The window it opens is
+                      the caller's; the row only shows the wait and its cancel. */}
+                      <Show when={accountSignIn()}>
+                        {(action) => (
+                          <>
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="xs"
+                              class="provider-picker-install provider-picker-connect"
+                              disabled={props.disabled || action().running}
+                              aria-busy={action().running ? "true" : undefined}
+                              onClick={() => void props.onAccountSignIn?.(option().id)}
+                            >
+                              <Show when={action().running}>
+                                <Spinner size="sm" />
+                              </Show>
+                              {action().label}
+                            </Button>
+                            <Show when={action().running && props.onCancelAccountSignIn}>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                aria-label={t("provider.aria.cancelSignIn", { name: option().name })}
+                                disabled={props.disabled}
+                                onClick={() => void props.onCancelAccountSignIn?.(option().id)}
+                              >
+                                {t("common.cancel")}
+                              </Button>
+                            </Show>
+                          </>
+                        )}
                       </Show>
                       <Show when={runtimeAction()}>
                         {(action) => (

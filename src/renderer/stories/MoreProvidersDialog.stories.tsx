@@ -1,7 +1,7 @@
 /**
  * The "More providers" dialog of the provider picker. The rows use the names of the provider
- * registry and the same description keys as the setup picker. A provider that is included with
- * OpenBot has no description.
+ * registry and the description the setup picker gives the free row. A provider that ships with
+ * Dengerbot has no description.
  */
 
 import { agentProviderName, PICKER_PROVIDERS } from "@openbot/contracts/agent-providers";
@@ -14,7 +14,7 @@ import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 // DeepSeek is the only provider this build names, so it is the only row that can carry a description.
 const DESCRIPTION_KEYS: Partial<Record<AgentProviderId, AppTextKey>> = {
-  deepseek: "onboarding.provider.freeModels",
+  deepseek: "onboarding.provider.deepseekAccount",
 };
 
 interface MoreProvidersStoryProps {

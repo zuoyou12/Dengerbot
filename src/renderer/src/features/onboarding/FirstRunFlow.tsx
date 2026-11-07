@@ -151,6 +151,17 @@ export function FirstRunFlow(props: FirstRunFlowProps) {
     },
   );
 
+  // A sign-in window that closed without an account stops the wait, so Start free can open it again.
+  createEffect(
+    () => ({ waiting: state.finishWhenReady, failed: providers.accountSignInPhase() === "failed" }),
+    ({ waiting, failed }) => {
+      if (waiting && failed)
+        setState((current) => {
+          current.finishWhenReady = false;
+        });
+    },
+  );
+
   /** Records an action on the step shown now, with the path the user chose. */
   function trackStep(action: "viewed" | "next" | "back" | "skipped", path: FirstRunPath = state.path): void {
     desktopAnalytics.track("onboarding_step", { step: state.step, action, ...(path ? { path } : {}) });
@@ -237,6 +248,12 @@ export function FirstRunFlow(props: FirstRunFlowProps) {
     if (phase === "not-downloaded" || phase === "download-error") {
       freeDownloadRequested = true;
       void providers.downloadProvider(FREE_PROVIDER).then(stopWaitUnlessSent);
+      return;
+    }
+    // The free row is the DeepSeek account: a wait for it opens its sign-in window while the
+    // account is signed out. Signed in already, the row is ready and this opens nothing.
+    if (free?.state !== "available" && providers.accountSignInPhase() !== "signing-in") {
+      void providers.startAccountSignIn(FREE_PROVIDER);
       return;
     }
     if (free?.state === "error") {

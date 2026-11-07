@@ -3,6 +3,7 @@ import type { AgentProviderId } from "@openbot/contracts/ipc";
 import { toast } from "@openbot/ui";
 import { useText } from "@openbot/ui/text";
 import { createMemo } from "solid-js";
+import { FREE_PROVIDER } from "./onboarding-provider-rows";
 import type { SetupProviders } from "./SetupProviderPicker";
 
 /**
@@ -48,12 +49,15 @@ export function createSetupNext(providers: SetupProviders) {
   });
 
   /**
-   * How the button connects `provider` now, or undefined when it cannot: the key dialog for a
-   * key-only provider, such as DeepSeek, and for OpenCode, else the row's Connect, which reports
-   * in a toast while it starts.
+   * How the button connects `provider` now, or undefined when it cannot: the DeepSeek account
+   * window for the free row, the key dialog for a key-only provider where one is offered, else the
+   * row's Connect, which reports in a toast while it starts.
    */
   function connectAction(provider: AgentProviderId): (() => void) | undefined {
     const source = providers.props;
+    // The free row is the DeepSeek account: Next opens the same window the row offers, and the row
+    // reports the wait. Signed in already, this is a no-op.
+    if (provider === FREE_PROVIDER) return () => void providers.startAccountSignIn(provider);
     if (isKeyOnlyProvider(provider) && source.providerKeys) return () => providers.signInProvider(provider);
     return () => {
       toast.info(t("onboarding.toast.connecting", { provider: selectedOption()?.name ?? provider }));

@@ -39,8 +39,6 @@ export const messages = {
   "onboarding.setup.chooseProvider": "プロバイダーを選択",
   "onboarding.setup.providerList": "{providers}、または {last}",
   "onboarding.setup.providerSeparator": "、",
-  "onboarding.provider.freeModels": "無料のモデル、アカウント不要",
-  "onboarding.provider.deepseekKey": "DeepSeek API キーで使う DeepSeek モデル",
   "onboarding.provider.tryFree": "無料で試す",
   "onboarding.provider.noSignIn": "サインイン不要",
   "onboarding.provider.more": "その他のプロバイダー",

@@ -1,7 +1,6 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
 import {
   type AgentAuthState,
   type AgentModelOption,
@@ -10,6 +9,7 @@ import {
   type KeyOnlyProviderId,
   type PromptCacheTtl,
 } from "@openbot/contracts/ipc";
+import { isDynamicRecord } from "@openbot/contracts/runtime-values";
 import { sourceText } from "@openbot/i18n/source";
 import { Effect } from "effect";
 import { AcpAgentClient, type AcpHistoryPersistence } from "./acp-client";
@@ -29,7 +29,11 @@ import {
 } from "./cli";
 import { CustomAcpAgentsClient, type CustomAgentConfig, type CustomAgentSource } from "./custom-acp-agents-client";
 import type { CustomProviderConfig, CustomProviderSource } from "./custom-provider-types";
-import { DSH_ACCOUNT_BRIDGE_PATCH_ENTRY, installDshAccountBridge } from "./dsh-account-bridge";
+import {
+  DSH_ACCOUNT_BRIDGE_PATCH_ENTRY,
+  DSH_ACCOUNT_HANDOFF_FILE,
+  installDshAccountBridge,
+} from "./dsh-account-bridge";
 import type { McpOAuthAuthority } from "./mcp-oauth-provider";
 import type { McpOAuthProxySettingsStore } from "./mcp-oauth-proxy";
 import type { McpDropReporter, McpEndpointSource, McpServerSource, McpToolRuntimeSource } from "./mcp-provider-shapes";
@@ -280,6 +284,27 @@ function dshHomeEnvironment(context: ProviderClientContext): { DSH_HOME?: string
   return { DSH_HOME: home };
 }
 
+/** How long a handoff answer stays current, as the main process's own reads treat it. */
+const DSH_HANDOFF_MAX_AGE_MS = 45 * 60_000;
+
+/**
+ * Whether the DeepSeek account that DSH holds is signed in, as the account bridge's handoff reports
+ * it. The OAuth sign-in stores its credential inside DSH itself, and the bridge rewrites this file
+ * when the account changes; a stale or unreadable handoff reads as signed out.
+ */
+function dshAccountSignedIn(context: ProviderClientContext): boolean {
+  const home = context.accountEnvironment?.DSH_HOME ?? dshHomeEnvironment(context).DSH_HOME;
+  if (!home) return false;
+  try {
+    const parsed = JSON.parse(readFileSync(join(home, DSH_ACCOUNT_HANDOFF_FILE), "utf8"));
+    if (!isDynamicRecord(parsed) || parsed.signedIn !== true) return false;
+    const updatedAt = parsed.updatedAt;
+    return typeof updatedAt === "number" && Date.now() - updatedAt < DSH_HANDOFF_MAX_AGE_MS;
+  } catch {
+    return false;
+  }
+}
+
 interface DshPiAiProviderProfile {
   readonly displayName: string;
   readonly api: NonNullable<CustomProviderConfig["api"]>;
@@ -384,13 +409,15 @@ function dshClient(
     },
     signInMessage,
     // DSH publishes its model catalog before any key is stored, so a successful discovery is not
-    // proof of an account. A stored DeepSeek key or a configured custom endpoint is.
+    // proof of an account. A stored DeepSeek key, a configured custom endpoint, or the signed-in
+    // DeepSeek account whose handoff the bridge rewrites is.
     authenticate: () => {
       if (
         context.apiKey(provider) ||
         context
           .customProviders()
-          .some((endpoint) => (endpoint.apiKey || endpoint.headers.length > 0) && endpoint.models.length > 0)
+          .some((endpoint) => (endpoint.apiKey || endpoint.headers.length > 0) && endpoint.models.length > 0) ||
+        dshAccountSignedIn(context)
       )
         return Effect.void;
       return Effect.fail(providerFailure(new ProviderSignInError({ message: signInMessage })));

@@ -40,8 +40,6 @@ export const messages = {
   "onboarding.setup.chooseProvider": "Выберите провайдера",
   "onboarding.setup.providerList": "{providers} или {last}",
   "onboarding.setup.providerSeparator": ", ",
-  "onboarding.provider.freeModels": "Бесплатные модели, аккаунт не нужен",
-  "onboarding.provider.deepseekKey": "Модели DeepSeek с ключом API DeepSeek",
   "onboarding.provider.tryFree": "Попробовать бесплатно",
   "onboarding.provider.noSignIn": "Вход не нужен",
   "onboarding.provider.more": "Другие провайдеры",

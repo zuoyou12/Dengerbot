@@ -36,6 +36,8 @@ export function createProviderRow(option: () => ProviderPickerOption, host: Prov
   const state = () => option().state;
   const runtimeStatus = () => option().runtimeStatus;
   const connecting = () => option().connectionState === "connecting";
+  /** The row's own account sign-in, in place of Connect. The option carries its label and its wait. */
+  const accountSignIn = () => option().accountSignIn ?? null;
   const available = () => state() === "available";
   const off = () => Boolean(option().off);
   const updatable = () => {
@@ -70,6 +72,8 @@ export function createProviderRow(option: () => ProviderPickerOption, host: Prov
   const connectOptional = () =>
     freeModelsReady(option()) && providerRuntimeAction(state(), connecting(), runtimeStatus()) === "connect";
   const runtimeAction = () => {
+    // The account sign-in is the row's step: it replaces the connect-family actions until it ends.
+    if (accountSignIn()) return undefined;
     if (updatable() && host.onUpdateProvider && runtimeStatus()?.phase === "not-downloaded") return;
     const action = providerRuntimeAction(state(), connecting(), runtimeStatus());
     // A dialog sign-in, such as a host's, cannot restart the provider: show only the Connect or
@@ -181,7 +185,7 @@ export function createProviderRow(option: () => ProviderPickerOption, host: Prov
    * actions never take the dialog away.
    */
   const signInOffered = () => {
-    if (!host.onSignInProvider || connectOptional()) return false;
+    if (!host.onSignInProvider || connectOptional() || accountSignIn()) return false;
     if (!isKeyOnlyProvider(option().id)) return false;
     const action = runtimeAction();
     return action === undefined || action === "connect" || action === "restart";
@@ -192,6 +196,7 @@ export function createProviderRow(option: () => ProviderPickerOption, host: Prov
    */
   const apiKeyOffered = () =>
     Boolean(host.onSignInProvider) &&
+    !accountSignIn() &&
     (isKeyOnlyProvider(option().id) || option().id === "claude" || option().id === "codex");
   /** No provider runs free models in this build. */
   const freeKey = () => false;
@@ -199,6 +204,7 @@ export function createProviderRow(option: () => ProviderPickerOption, host: Prov
     state,
     runtimeStatus,
     connecting,
+    accountSignIn,
     available,
     off,
     updatable,

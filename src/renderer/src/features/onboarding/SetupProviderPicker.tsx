@@ -11,7 +11,6 @@ import {
   type ProviderRuntimeStatus,
   type SaveCustomProviderInput,
 } from "@openbot/contracts/ipc";
-import type { AppTextKey } from "@openbot/i18n";
 import {
   type ProviderConnection,
   ProviderPicker,
@@ -29,7 +28,7 @@ import {
 } from "@openbot/ui/features/settings/OpenCodeKeyDialog";
 import { useText } from "@openbot/ui/text";
 import { errorReference, type UserErrorDetails } from "@openbot/user-errors";
-import { createEffect, createMemo, createSignal, onCleanup, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, onSettled, Show, untrack } from "solid-js";
 import { createCustomProviderHostState } from "../custom-providers/custom-provider-host-state";
 import { FREE_PROVIDER, onboardingProviderRows } from "./onboarding-provider-rows";
 import { fallbackProviderState } from "./onboarding-provider-state";
@@ -53,8 +52,8 @@ export interface SetupProviderProps {
   onInstallProvider?: ((provider: AgentProviderId) => void | Promise<void>) | undefined;
   onSignInProvider?: ((provider: AgentProviderId) => void | Promise<void>) | undefined;
   /**
-   * Saves the optional OpenCode Go key. OpenCode runs free models without it, so its Connect row
-   * button opens the key dialog rather than gating the step.
+   * Saves the API key of a key-only provider (DeepSeek) and of Claude and Codex, on the surfaces
+   * that pass it. The free row of setup signs in with the DeepSeek account instead and needs no key.
    */
   providerKeys?: ProviderKeyApi | undefined;
   /** How each row signs in: the browser sign-in of this computer, which a joined host does not offer. */
@@ -100,15 +99,6 @@ const SETUP_PROVIDERS: Array<{ id: AgentProviderId; name: string; description: s
     name: descriptor.displayName,
     description: descriptor.onboardingDescription === INCLUDED_DESCRIPTION ? null : descriptor.onboardingDescription,
   }));
-
-/**
- * The provider registry carries its onboarding line in English. A line that has no key here, such
- * as one a newer registry adds, shows as it is.
- */
-const PROVIDER_DESCRIPTION_KEYS: Readonly<Record<string, AppTextKey>> = {
-  "Free models, no account needed": "onboarding.provider.freeModels",
-  "DeepSeek models with a DeepSeek API key": "onboarding.provider.deepseekKey",
-};
 
 /**
  * Whether setup can continue with this provider. A signed-in provider can; so can a downloaded
@@ -181,6 +171,54 @@ export function createSetupProviders(
   let blurredAfterProviderConnect = false;
   let focusRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 
+  /**
+   * The DeepSeek account of this computer, as the DSH account bridge reports it. The free row is
+   * this account: the sign-in window lives in main, and main closes it once the bridge hands the
+   * account over, so the poll is all the row has to notice.
+   */
+  const [dshState, setDshState] = createSignal<Awaited<ReturnType<typeof window.openbot.getDshAccount>> | null>(null);
+  onSettled(() => {
+    if (props.hostProviders) return;
+    let stopped = false;
+    const poll = async (): Promise<void> => {
+      try {
+        const next = await window.openbot.getDshAccount();
+        if (!stopped) setDshState(next);
+      } catch {
+        // The next poll answers; a missed read is not worth an error on the step.
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 2_000);
+    onCleanup(() => {
+      stopped = true;
+      clearInterval(timer);
+    });
+  });
+  /** Whether the DeepSeek account is signed in: the free row's readiness. */
+  const dshSignedIn = () => dshState()?.account?.signedIn === true;
+
+  /** Opens the DeepSeek account sign-in window for the free row. Already signed in, it opens nothing. */
+  async function startAccountSignIn(provider: AgentProviderId): Promise<void> {
+    if (provider !== FREE_PROVIDER || props.hostProviders || dshSignedIn()) return;
+    setError("");
+    try {
+      await window.openbot.startDshSignIn();
+    } catch (cause) {
+      setError(t("onboarding.error.dshSignIn"), cause);
+    }
+  }
+
+  /** Cancels the sign-in window the free row waits on. */
+  async function cancelAccountSignIn(provider: AgentProviderId): Promise<void> {
+    if (provider !== FREE_PROVIDER || props.hostProviders) return;
+    try {
+      await window.openbot.cancelDshSignIn();
+    } catch (cause) {
+      setError(t("onboarding.error.dshCancel"), cause);
+    }
+  }
+
   const providerOptions = createMemo<ProviderPickerOption[]>(() =>
     SETUP_PROVIDERS.filter(
       (provider) =>
@@ -190,19 +228,31 @@ export function createSetupProviders(
     ).map((provider) => {
       const status = props.agentStatus.providers?.find((candidate) => candidate.id === provider.id);
       const runtime = props.providerRuntimeStatuses?.[provider.id];
-      const descriptionKey = provider.description ? PROVIDER_DESCRIPTION_KEYS[provider.description] : undefined;
+      // The free row is the DeepSeek account. A state that waits for its key reads as connected
+      // while the account bridge reports the account in, because that account is its way in; a
+      // real failure keeps its own state. A joined host's step shows the host's providers, so it
+      // takes no signal from this computer's account.
+      const account = provider.id === FREE_PROVIDER && !props.hostProviders ? dshState() : null;
+      const accountSignedIn = account?.account?.signedIn === true;
+      const baseState = status?.state ?? fallbackProviderState(props.agentStatus);
+      const signingIn = account !== null && account.phase === "signing-in" && !accountSignedIn;
       return {
         ...provider,
-        description: descriptionKey ? t(descriptionKey) : provider.description,
-        state: status?.state ?? fallbackProviderState(props.agentStatus),
+        description: provider.id === FREE_PROVIDER ? t("onboarding.provider.deepseekAccount") : provider.description,
+        state:
+          accountSignedIn && (baseState === "sign-in-required" || baseState === "checking") ? "available" : baseState,
         message: status?.message,
         email: status?.email,
-        connectionState: status?.connectionState,
+        connectionState: signingIn ? "connecting" : status?.connectionState,
         checkError: status?.checkError,
         availableVersion: props.providerAvailableVersions?.[provider.id] ?? null,
         // No provider runs free models in this build.
         freeModels: false,
         callout: null,
+        accountSignIn:
+          provider.id === FREE_PROVIDER && !accountSignedIn && baseState !== "available"
+            ? { label: t("onboarding.provider.dshSignIn"), running: account !== null && account.phase === "signing-in" }
+            : undefined,
         runtimeStatus:
           runtime?.phase === "not-downloaded" && (status?.state === "available" || status?.state === "sign-in-required")
             ? { ...runtime, phase: "ready", version: status.version }
@@ -521,6 +571,10 @@ export function createSetupProviders(
     selectCustomProvider,
     signInProvider,
     connectProvider,
+    startAccountSignIn,
+    cancelAccountSignIn,
+    /** The phase of the DeepSeek account sign-in window, or null before the first poll answered. */
+    accountSignInPhase: () => dshState()?.phase ?? null,
     downloadProvider,
     /** Forgets the user's choice, so the step chooses again from the rows it shows. */
     clearChoice: () => {
@@ -586,6 +640,8 @@ export function SetupProviderPicker(props: SetupProviderPickerProps) {
         onSignInProvider={
           source().onSignInProvider || source().providerKeys ? props.providers.signInProvider : undefined
         }
+        onAccountSignIn={props.providers.startAccountSignIn}
+        onCancelAccountSignIn={props.providers.cancelAccountSignIn}
         onUpdateProvider={source().onUpdateProvider}
         menuMount={props.menuMount}
         onRefreshProviders={

@@ -40,8 +40,6 @@ export const messages = {
   "onboarding.setup.chooseProvider": "Bir sağlayıcı seçin",
   "onboarding.setup.providerList": "{providers} veya {last}",
   "onboarding.setup.providerSeparator": ", ",
-  "onboarding.provider.freeModels": "Ücretsiz modeller, hesap gerekmez",
-  "onboarding.provider.deepseekKey": "DeepSeek API anahtarıyla DeepSeek modelleri",
   "onboarding.provider.tryFree": "Ücretsiz deneyin",
   "onboarding.provider.noSignIn": "Oturum açmak gerekmez",
   "onboarding.provider.more": "Daha fazla sağlayıcı",
